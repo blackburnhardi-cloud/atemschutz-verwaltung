@@ -128,7 +128,7 @@ async function save(){
  if(!driveFileId){
  let meta={name:DRIVE_NAME,parents:["appDataFolder"],mimeType:"application/json"};
  let boundary="atemschutz_"+Date.now();
- let body="--"+boundary+"\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n"+JSON.stringify(meta)+"\\r\\n--"+boundary+"\\r\\nContent-Type: application/json\\r\\n\\r\\n"+JSON.stringify(snapshot)+"\\r\\n--"+boundary+"--";
+ let body="--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(meta)+"\r\n--"+boundary+"\r\nContent-Type: application/json\r\n\r\n"+JSON.stringify(snapshot)+"\r\n--"+boundary+"--";
  let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,version",{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+boundary},body});
  let x=await r.json();driveFileId=x.id;driveVersion=String(x.version);
  }else{
