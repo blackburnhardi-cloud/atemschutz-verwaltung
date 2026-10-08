@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <!-- v6: Fristen werden beim Speichern zwingend aus den Basisdaten berechnet -->
+  <!-- v5: Gerät/Lungenautomat 6 Monate, Flasche 6 Jahre, Maske 6 Monate -->
+  <!-- v4: Maskenfrist = 6 Monate ab Prüfdatum -->
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atemschutz-Verwaltung</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--text:#17212b;--muted:#6b7785;--line:#dfe4e8;--green:#16833a;--yellow:#a56a00;--red:#c62828}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#20262d;color:#fff;padding:17px 23px;display:flex;align-items:center;justify-content:space-between;gap:15px}header h1{margin:0;font-size:21px}header small{color:#cbd2d8}
+nav{background:#fff;border-bottom:1px solid var(--line);display:flex;gap:4px;padding:8px 15px;overflow:auto}nav button{border:0;background:transparent;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:700;color:#52606d;white-space:nowrap}nav button.active{background:#eef1f4;color:#20262d}
+main{max-width:1200px;margin:auto;padding:22px}.page{display:none}.page.active{display:block}h2{margin:0 0 15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:14px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:17px;box-shadow:0 1px 2px #00000008}.metric .num{font-size:31px;font-weight:800}.metric .label{color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px}.toolbar h2{margin-right:auto}button{border:0;border-radius:8px;padding:10px 14px;background:#20262d;color:#fff;cursor:pointer;font-weight:700}button.secondary{background:#e9edf0;color:#20262d}button.danger{background:#b71c1c}
+input,select{width:100%;padding:10px 11px;border:1px solid #cfd6dc;border-radius:8px;font:inherit;background:#fff}label{display:block;font-size:13px;font-weight:700;color:#4d5965;margin-bottom:5px}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}table{width:100%;border-collapse:collapse;background:#fff}th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);font-size:14px}th{background:#f7f8f9;color:#53606c}.scroll{overflow:auto}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{padding:7px 9px;font-size:12px}
+.badge{display:inline-block;padding:5px 8px;border-radius:999px;font-size:12px;font-weight:800}.ok{background:#e5f5eb;color:var(--green)}.soon{background:#fff3d6;color:var(--yellow)}.overdue{background:#fde7e7;color:var(--red)}.none{background:#edf0f2;color:#64707c}
+.vehicle-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}.vehicle-card h3{margin-top:0}.vehicle-card p{font-size:13px;line-height:1.7}.empty{padding:27px;text-align:center;color:var(--muted)}.notice{padding:12px 14px;border-radius:9px;background:#fff8e6;border:1px solid #f0d58a;margin-bottom:14px}
+.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:16px;z-index:10}.modal.open{display:flex}.modalbox{background:#fff;border-radius:14px;max-width:720px;width:100%;max-height:90vh;overflow:auto;padding:20px}.modalhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.modalhead h3{margin:0}
+@media(max-width:600px){main{padding:14px}.grid{grid-template-columns:1fr 1fr}.metric .num{font-size:25px}th,td{padding:9px;font-size:13px}}
+
+:root{color-scheme:dark;--bg:#101820;--card:#1c2936;--text:#edf4fa;--muted:#b5c5d4;--line:#405264;--green:#79e3ac;--yellow:#ffd67d;--red:#ff9c9c}
+header{background:#0b1118}nav{background:#17232f}nav button{color:#d2e1ef}nav button.active{background:#34495d;color:#fff}
+.card,.modalbox,table{background:var(--card);color:var(--text)}th{background:#263748;color:#e1eaf2}
+button{background:#376b96;color:#fff}button.secondary{background:#35495b;color:#fff}button.danger{background:#9a3c42;color:#fff}
+input,select{background:#101c27;color:#fff;border-color:#71849a}label{color:#d8e5f1}
+.notice{background:#343024;border-color:#a88b4a;color:#fff}.ok{background:#174e3a;color:#b6ffda}.soon{background:#59441c;color:#ffe0a2}.overdue{background:#602c32;color:#ffc2c2}.none{background:#37495a;color:#fff}
+.vehicle-card [style*="border-bottom:1px solid #e8ebee"]{border-bottom-color:#405264!important}
+:focus-visible{outline:3px solid #9ecfff;outline-offset:2px}
+</style>
+</head>
+<body>
+<header><div><h1>Atemschutz-Verwaltung</h1><small>Bestand &amp; Austauschtermine</small></div><button onclick="exportData()">Daten sichern</button></header>
+<nav>
+<button class="active" data-page="dashboard">Dashboard</button><button data-page="fahrzeuge">Fahrzeuge</button><button data-page="geraete">Geräte</button><button data-page="masken">Masken</button><button data-page="flaschen">Einzelflaschen</button><button data-page="import">Import / Export</button>
+</nav>
+<main>
+<div class="card" style="margin-bottom:14px"><div class="toolbar" style="align-items:center;margin:0"><button onclick="configureDrive()" class="secondary">Google Drive einrichten</button><button onclick="connectDrive()">Mit Google anmelden</button><button onclick="disconnectDrive()" class="secondary">Abmelden</button></div><p style="font-size:13px;color:var(--muted);margin-bottom:0">Einmalig eine Google OAuth-Client-ID eintragen. Danach auf beiden Geräten mit demselben Google-Konto anmelden.</p></div><div id="connectionStatus" role="status" style="padding:10px 15px;border-radius:8px;margin-bottom:14px;background:#233449">Verbindung wird geprüft …</div><section id="dashboard" class="page active"><h2>Übersicht</h2><div class="grid" id="metrics"></div>
+<div class="card" style="margin-top:14px"><h3>Austauschtermine</h3><div id="dueList"></div></div>
+<h3 style="margin-top:22px">Fahrzeuge</h3><div class="vehicle-grid" id="vehicleOverview"></div></section>
+
+<section id="fahrzeuge" class="page"><div class="toolbar"><h2>Fahrzeuge</h2><button onclick="openVehicle()">+ Fahrzeug</button></div><div class="card scroll"><table><thead><tr><th>Fahrzeug</th><th>Geräte</th><th>Masken</th><th>Aktionen</th></tr></thead><tbody id="vehicleTable"></tbody></table></div></section>
+
+<section id="geraete" class="page"><div class="toolbar"><h2>Atemschutzgeräte</h2><button onclick="openDevice()">+ Gerät</button></div><div class="card" style="margin-bottom:14px"><label>Suche nach Gerätenummer, Lungenautomatnummer oder Flaschennummer</label><input id="deviceSearch" oninput="render()" placeholder="z. B. PA-023, LA-023 oder F-118"></div>
+<div class="card scroll"><table><thead><tr><th>Gerät</th><th>Lungenautomat</th><th>Flasche</th><th>Fahrzeug</th><th>Eingang geprüft</th><th>Gerät/LA fällig</th><th>Flasche fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="deviceTable"></tbody></table></div></section>
+
+<section id="masken" class="page"><div class="toolbar"><h2>Masken</h2><button onclick="openMask()">+ Maske</button></div><div class="card" style="margin-bottom:14px"><label>Suche nach Maskennummer</label><input id="maskSearch" oninput="render()" placeholder="z. B. M-023"></div>
+<div class="card scroll"><table><thead><tr><th>Maske</th><th>Fahrzeug</th><th>Prüfdatum</th><th>Austausch fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="maskTable"></tbody></table></div></section>
+
+<section id="flaschen" class="page"><div class="toolbar"><h2>Einzelflaschen</h2><button onclick="openBottle()">+ Flasche</button></div><div class="card scroll"><table><thead><tr><th>Flasche</th><th>Fahrzeug</th><th>Eingang</th><th>Fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="bottleTable"></tbody></table></div></section><section id="import" class="page"><h2>Import / Export</h2><div class="notice"><b>Gemeinsame Daten:</b> Die Daten liegen im versteckten App-Datenbereich deines Google Drive. Eine Internetverbindung und Google-Anmeldung sind zum Bearbeiten nötig. Vorhandene Daten aus v10/v11 per JSON importieren.</div><div class="card"><h3>Datensicherung</h3><p>Alle Fahrzeuge, Geräte, Masken, Einzelflaschen und die Historie sichern oder wiederherstellen.</p><button onclick="exportData()">JSON exportieren</button><label style="margin-top:18px">JSON-Datei wiederherstellen</label><input type="file" accept=".json,application/json" onchange="importData(event)"></div></section>
+</main>
+<div class="modal" id="modal"><div class="modalbox"><div class="modalhead"><h3 id="modalTitle"></h3><button class="secondary" onclick="closeModal()">Schließen</button></div><div id="modalBody"></div></div></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const KEY="atemschutz_v2";
+let data=JSON.parse(localStorage.getItem(KEY)||'{"vehicles":[],"devices":[],"masks":[],"history":[]}');
+data.bottles ||= [];data.history ||= [];
+const $=id=>document.getElementById(id), uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const CLIENT_KEY="atemschutz_google_client_id";
+const DRIVE_NAME="atemschutz-verwaltung.json";
+const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.appdata";
+let online=false,pending=false,driveToken="",driveFileId="",driveVersion="",driveClient=null,lastSavedData=null,unsaved=false;
+function setConnection(message,connected){online=connected;const el=$("connectionStatus");if(el){el.textContent=message;el.style.background=connected?"#153f37":"#50302e"}}
+function configureDrive(){let current=localStorage.getItem(CLIENT_KEY)||"";let id=prompt("Google OAuth-Client-ID (Webanwendung) eingeben:",current);if(id===null)return;id=id.trim();if(!id.endsWith(".apps.googleusercontent.com"))return alert("Bitte eine gültige OAuth-Client-ID eingeben.");localStorage.setItem(CLIENT_KEY,id);alert("Client-ID gespeichert. Jetzt auf „Mit Google anmelden“ klicken.")}
+function connectDrive(){
+ const id=localStorage.getItem(CLIENT_KEY);
+ if(!id)return configureDrive();
+ if(!window.google?.accounts?.oauth2)return alert("Google-Anmeldung ist noch nicht geladen. Internetverbindung prüfen und Seite neu laden.");
+ if(location.protocol!=="https:"&&location.hostname!=="localhost")return alert("Für Google-Anmeldung muss die Seite über HTTPS bereitgestellt werden (oder auf localhost laufen).");
+ driveClient=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,callback:async response=>{
+ if(response.error)return alert("Google-Anmeldung fehlgeschlagen: "+response.error);
+ driveToken=response.access_token;await loadShared();
+ }});
+ driveClient.requestAccessToken({prompt:"consent"});
+}
+function disconnectDrive(){driveToken="";driveFileId="";driveVersion="";lastSavedData=null;setConnection("Abgemeldet – nur Ansicht",false)}
+async function driveFetch(url,opts={}){
+ let response=await fetch(url,{...opts,headers:{Authorization:"Bearer "+driveToken,...(opts.headers||{})}});
+ if(response.status===401){setConnection("Anmeldung abgelaufen – bitte erneut anmelden",false);throw Error("Anmeldung abgelaufen")}
+ if(!response.ok){let detail=await response.text();throw Error("Google Drive: "+response.status+" "+detail.slice(0,180))}
+ return response;
+}
+async function findDriveFile(){
+ let r=await driveFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q="+encodeURIComponent("name = '"+DRIVE_NAME+"' and trashed = false")+"&fields=files(id,name,version),nextPageToken&page_size=100");
+ let files=(await r.json()).files||[];
+ if(files.length>1)throw Error("Mehrere Sicherungsdateien gefunden. Bitte nicht bearbeiten, bevor die Duplikate geprüft wurden.");
+ return files[0]||null;
+}
+async function fetchDriveState(){
+ let file=await findDriveFile();
+ if(!file)return {file:null,data:null};
+ let r=await driveFetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(file.id)+"?alt=media");
+ let obj=await r.json();
+ if(!obj||!["vehicles","devices","masks"].every(k=>Array.isArray(obj[k])))throw Error("Ungültige Cloud-Daten");
+ obj.bottles ||= [];obj.history ||= [];
+ return {file,data:obj};
+}
+async function loadShared(){
+ if(!driveToken||pending||unsaved)return;
+ try{
+ let remote=await fetchDriveState();
+ if(remote.file){driveFileId=remote.file.id;driveVersion=String(remote.file.version);data=remote.data;normalizeDeadlines();lastSavedData=structuredClone(data);localStorage.setItem(KEY,JSON.stringify(data));setConnection("Google Drive verbunden – Daten synchronisiert",true)}
+ else{driveFileId="";driveVersion="";data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};lastSavedData=structuredClone(data);setConnection("Google Drive verbunden – noch keine Daten gespeichert",true)}
+ render();
+ }catch(e){setConnection("Synchronisierung fehlgeschlagen – Bearbeitung gesperrt",false);console.error(e)}
+}
+async function save(){
+ if(!online||pending){alert("Momentan kann nicht gespeichert werden. Bitte Verbindung prüfen.");return}
+ pending=true;unsaved=true;
+ const snapshot=structuredClone(data);
+ try{
+ const remote=await fetchDriveState();
+ if((remote.file?.id||"")!==driveFileId || String(remote.file?.version||"")!==driveVersion){
+ alert("Google Drive wurde auf einem anderen Gerät geändert. Deine Änderung wurde nicht gespeichert. Der neueste Stand wird geladen.");
+ data=lastSavedData?structuredClone(lastSavedData):data;
+ pending=false;unsaved=false;await loadShared();return;
+ }
+ if(!driveFileId){
+ let meta={name:DRIVE_NAME,parents:["appDataFolder"],mimeType:"application/json"};
+ let boundary="atemschutz_"+Date.now();
+ let body="--"+boundary+"\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n"+JSON.stringify(meta)+"\\r\\n--"+boundary+"\\r\\nContent-Type: application/json\\r\\n\\r\\n"+JSON.stringify(snapshot)+"\\r\\n--"+boundary+"--";
+ let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,version",{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+boundary},body});
+ let x=await r.json();driveFileId=x.id;driveVersion=String(x.version);
+ }else{
+ let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files/"+encodeURIComponent(driveFileId)+"?uploadType=media&fields=id,version",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(snapshot)});
+ let x=await r.json();driveVersion=String(x.version);
+ }
+ lastSavedData=structuredClone(snapshot);localStorage.setItem(KEY,JSON.stringify(snapshot));setConnection("Google Drive verbunden – gespeichert",true);render();
+ }catch(e){console.error(e);setConnection("Speichern fehlgeschlagen – bitte neu anmelden oder Verbindung prüfen",false);alert("Speichern fehlgeschlagen. Änderungen bitte über „Daten sichern“ als JSON exportieren und anschließend die Verbindung prüfen.")}
+ finally{pending=false;unsaved=false}
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function addDays(date,days){if(!date)return"";let d=new Date(date+"T00:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
+function addMonths(date,months){if(!date)return"";let d=new Date(date+"T00:00:00");d.setMonth(d.getMonth()+months);return d.toISOString().slice(0,10)}
+function addYears(date,years){if(!date)return"";let d=new Date(date+"T00:00:00");d.setFullYear(d.getFullYear()+years);return d.toISOString().slice(0,10)}
+function normalizeDeadlines(){
+  (data.devices||[]).forEach(d=>{
+    if(d.received){
+      d.due=addMonths(d.received,6);
+      d.bottleDue=addYears(d.received,6);
+    }
+  });
+  data.bottles.forEach(b=>{if(b.received)b.due=addYears(b.received,6)});
+  (data.masks||[]).forEach(m=>{
+    if(m.testDate) m.due=addMonths(m.testDate,6);
+  });
+}
+function daysUntil(date){if(!date)return null;let d=new Date(date+"T23:59:59"),n=new Date();n.setHours(0,0,0,0);return Math.ceil((d-n)/86400000)}
+function status(date){let d=daysUntil(date);if(d===null)return["none","keine Frist"];if(d<0)return["overdue",`überfällig (${Math.abs(d)} T.)`];if(d<=30)return["soon",`bald (${d} T.)`];return["ok",`OK (${d} T.)`]}
+function badge(date){let[c,t]=status(date);return`<span class="badge ${c}">${t}</span>`}
+function vname(id){return data.vehicles.find(v=>v.id===id)?.name||"—"}
+function dueItems(){let a=[];data.devices.forEach(d=>{a.push({type:"Gerät / LA",no:d.deviceNo,vehicle:d.vehicleId,date:d.due});if(d.bottleDue)a.push({type:"Flasche",no:d.bottleNo,vehicle:d.vehicleId,date:d.bottleDue})});data.bottles.forEach(b=>a.push({type:"Einzelflasche",no:b.bottleNo,vehicle:b.vehicleId,date:b.due}));data.masks.forEach(m=>a.push({type:"Maske",no:m.maskNo,vehicle:m.vehicleId,date:m.due}));return a.filter(x=>x.date).sort((a,b)=>a.date.localeCompare(b.date))}
+normalizeDeadlines();
+localStorage.setItem(KEY,JSON.stringify(data));
+function germanDate(v){if(!v)return "—";let m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v);return m?`${m[3]}.${m[2]}.${m[1]}`:v}
+function dueMonth(v){if(!v)return "—";let m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v);if(!m)return v;return `${["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"][Number(m[2])-1]} ${m[1]}`}
+function dueDisplay(v){return v?`<span title="Genau fällig am ${germanDate(v)}" style="cursor:help;border-bottom:1px dotted currentColor">${dueMonth(v)}</span>`:"—"}
+function render(){
+ let a=dueItems(),over=a.filter(x=>daysUntil(x.date)<0).length,soon=a.filter(x=>{let d=daysUntil(x.date);return d>=0&&d<=30}).length;
+ $("metrics").innerHTML=`<div class="card metric"><div class="num">${data.devices.length}</div><div class="label">Atemschutzgeräte</div></div><div class="card metric"><div class="num">${data.masks.length}</div><div class="label">Masken</div></div><div class="card metric"><div class="num">${over}</div><div class="label">überfällige Austausche</div></div><div class="card metric"><div class="num">${soon}</div><div class="label">innerhalb 30 Tage</div></div>`;
+ $("dueList").innerHTML=a.length?`<div class="scroll"><table><thead><tr><th>Typ</th><th>Nummer</th><th>Fahrzeug</th><th>Termin</th><th>Status</th></tr></thead><tbody>${a.map(x=>`<tr><td>${x.type}</td><td><b>${esc(x.no)}</b></td><td>${esc(vname(x.vehicle))}</td><td>${dueDisplay(x.date)}</td><td>${badge(x.date)}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">Noch keine Austauschtermine eingetragen.</div>`;
+ $("vehicleTable").innerHTML=data.vehicles.length?data.vehicles.map(v=>`<tr><td><b>${esc(v.name)}</b></td><td>${data.devices.filter(d=>d.vehicleId===v.id).length}</td><td>${data.masks.filter(m=>m.vehicleId===v.id).length}</td><td class="actions"><button class="secondary" onclick="openVehicle('${v.id}')">Bearbeiten</button><button class="danger" onclick="deleteVehicle('${v.id}')">Löschen</button></td></tr>`).join(""):`<tr><td colspan="4" class="empty">Noch keine Fahrzeuge.</td></tr>`;
+ let ds=(data.devices||[]), q=(($("deviceSearch")?.value)||"").toLowerCase().trim(); if(q)ds=ds.filter(d=>[d.deviceNo,d.laNo,d.bottleNo,vname(d.vehicleId)].join(" ").toLowerCase().includes(q)); $("deviceTable").innerHTML=ds.length?ds.map(d=>`<tr><td><b>${esc(d.deviceNo)}</b></td><td>${esc(d.laNo)}</td><td>${esc(d.bottleNo)}</td><td>${esc(vname(d.vehicleId))}</td><td>${germanDate(d.received)}</td><td>${dueDisplay(d.due)}</td><td>${dueDisplay(d.bottleDue)}</td><td>${badge(d.due)}</td><td class="actions"><button class="secondary" onclick="openDevice('${d.id}')">Bearbeiten</button><button onclick="exchangeDevice('${d.id}')">Austausch</button><button class="danger" onclick="deleteDevice('${d.id}')">Löschen</button></td></tr>`).join(""):`<tr><td colspan="9" class="empty">${q?"Kein passendes Gerät gefunden.":"Noch keine Geräte."}</td></tr>`;
+ let ms=(data.masks||[]), mq=(($("maskSearch")?.value)||"").toLowerCase().trim(); if(mq)ms=ms.filter(m=>[m.maskNo,vname(m.vehicleId)].join(" ").toLowerCase().includes(mq)); $("maskTable").innerHTML=ms.length?ms.map(m=>`<tr><td><b>${esc(m.maskNo)}</b></td><td>${esc(vname(m.vehicleId))}</td><td>${germanDate(m.testDate)}</td><td>${dueDisplay(m.due)}</td><td>${badge(m.due)}</td><td class="actions"><button class="secondary" onclick="openMask('${m.id}')">Bearbeiten</button><button onclick="exchangeMask('${m.id}')">Austausch</button><button class="danger" onclick="deleteMask('${m.id}')">Löschen</button></td></tr>`).join(""):`<tr><td colspan="6" class="empty">${mq?"Keine passende Maske gefunden.":"Noch keine Masken."}</td></tr>`;
+ $("bottleTable").innerHTML=data.bottles.length?data.bottles.map(b=>`<tr><td>${esc(b.bottleNo)}</td><td>${esc(vname(b.vehicleId))}</td><td>${germanDate(b.received)}</td><td>${dueDisplay(b.due)}</td><td>${badge(b.due)}</td><td class="actions"><button class="secondary" onclick="openBottle('${b.id}')">Bearbeiten</button><button onclick="exchangeBottle('${b.id}')">Austausch</button><button class="danger" onclick="deleteBottle('${b.id}')">Löschen</button></td></tr>`).join(""):`<tr><td colspan="6" class="empty">Noch keine Einzelflaschen.</td></tr>`;
+ $("vehicleOverview").innerHTML=data.vehicles.length?data.vehicles.map(v=>{
+ let ds=data.devices.filter(d=>d.vehicleId===v.id),ms=data.masks.filter(m=>m.vehicleId===v.id),bs=data.bottles.filter(b=>b.vehicleId===v.id);
+ return `<div class="card vehicle-card"><h3>${esc(v.name)}</h3>
+ <div class="inventory"><strong>Atemschutzgeräte</strong>${ds.length?ds.map(d=>`<div style="padding:9px 0;border-bottom:1px solid #e8ebee"><b>Gerät ${esc(d.deviceNo)}</b><div>LA: ${esc(d.laNo)} · Flasche: ${esc(d.bottleNo)}</div><div>Gerät/LA fällig: ${dueDisplay(d.due)}</div><div>Flasche fällig: ${dueDisplay(d.bottleDue)}</div><div>${badge(d.due)}</div></div>`).join(""):`<p>Keine Geräte zugeordnet.</p>`}
+ <div style="margin-top:14px"><strong>Masken</strong>${ms.length?ms.map(m=>`<div style="padding:7px 0">${esc(m.maskNo)} · ${dueDisplay(m.due)} ${badge(m.due)}</div>`).join(""):`<p>Keine Masken zugeordnet.</p>`}</div>
+ <div style="margin-top:14px"><strong>Einzelflaschen</strong>${bs.length?bs.map(b=>`<div style="padding:7px 0">${esc(b.bottleNo)} · ${dueDisplay(b.due)} ${badge(b.due)}</div>`).join(""):`<p>Keine Einzelflaschen zugeordnet.</p>`}</div></div></div>`;
+ }).join(""):`<div class="card empty">Lege zuerst Fahrzeuge an.</div>`;
+}
+function vehicleSelect(selected=""){return`<select id="vehicleId"><option value="">— kein Fahrzeug —</option>${data.vehicles.map(v=>`<option value="${v.id}" ${v.id===selected?"selected":""}>${esc(v.name)}</option>`).join("")}</select>`}
+function openVehicle(id){let v=data.vehicles.find(x=>x.id===id)||{name:""};showModal(id?"Fahrzeug bearbeiten":"Fahrzeug hinzufügen",`<label>Fahrzeug</label><input id="vName" value="${esc(v.name)}" placeholder="z. B. HLF 20"><div class="toolbar" style="margin-top:18px"><button onclick="saveVehicle('${id||""}')">Speichern</button></div>`)}
+function saveVehicle(id){let name=$("vName").value.trim();if(!name)return alert("Bitte Fahrzeug angeben.");if(id)data.vehicles.find(v=>v.id===id).name=name;else data.vehicles.push({id:uid(),name});closeModal();save()}
+function deleteVehicle(id){if(data.devices.some(d=>d.vehicleId===id)||data.masks.some(m=>m.vehicleId===id)||data.bottles.some(b=>b.vehicleId===id))return alert("Fahrzeug hat noch zugeordnete Geräte oder Masken.");if(confirm("Fahrzeug wirklich löschen?")){data.vehicles=data.vehicles.filter(v=>v.id!==id);save()}}
+function openDevice(id){let d=data.devices.find(x=>x.id===id)||{deviceNo:"",laNo:"",bottleNo:"",vehicleId:"",received:new Date().toISOString().slice(0,10),due:"",bottleDue:""};
+showModal(id?"Gerät bearbeiten":"Gerät hinzufügen",`<div class="notice">Gerät, Lungenautomat und Flasche kommen als <b>ein gemeinsamer Satz</b>. Das Eingangsdatum bei dir ist das Prüfdatum. Gerät/LA werden nach 6 Monaten fällig, die Flasche nach 6 Jahren.</div><div class="formgrid"><div><label>Gerätenummer</label><input id="deviceNo" value="${esc(d.deviceNo)}"></div><div><label>Lungenautomatnummer</label><input id="laNo" value="${esc(d.laNo)}"></div><div><label>Flaschennummer</label><input id="bottleNo" value="${esc(d.bottleNo)}"></div><div><label>Fahrzeug</label>${vehicleSelect(d.vehicleId)}</div><div><label>Eingangsdatum / geprüft ab</label><input type="date" id="received" value="${esc(d.received)}"></div><div><label>Gerät / Lungenautomat: Austausch fällig am</label><input type="date" id="due" value="${esc(d.due)}" readonly><small style="color:#68737e">Automatisch: Eingangsdatum + 6 Monate.</small></div><div><label>Flasche: Austausch fällig am</label><input type="date" id="bottleDue" value="${esc(d.bottleDue)}" readonly><small style="color:#68737e">Automatisch: Eingangsdatum + 6 Jahre.</small></div></div><div class="toolbar" style="margin-top:18px"><button onclick="saveDevice('${id||""}')">Speichern</button></div>`)}
+function saveDevice(id){let r=$("received").value,obj={deviceNo:$("deviceNo").value.trim(),laNo:$("laNo").value.trim(),bottleNo:$("bottleNo").value.trim(),vehicleId:$("vehicleId").value,received:r,due:addMonths(r,6),bottleDue:addYears(r,6)};
+if(!obj.deviceNo)return alert("Bitte Gerätenummer angeben.");if(id)Object.assign(data.devices.find(d=>d.id===id),obj);else data.devices.push({id:uid(),...obj});closeModal();save()}
+function deleteDevice(id){if(confirm("Gerät wirklich löschen?")){data.devices=data.devices.filter(x=>x.id!==id);save()}}
+function exchangeDevice(id){let d=data.devices.find(x=>x.id===id);showModal("Gerät austauschen",`<p>Das alte Gerät <b>${esc(d.deviceNo)}</b> wird als ausgetauscht dokumentiert. Neue Nummern und Eingangsdatum eintragen.</p><div class="formgrid"><div><label>Neue Gerätenummer</label><input id="nDev"></div><div><label>Neue Lungenautomatnummer</label><input id="nLa"></div><div><label>Neue Flaschennummer</label><input id="nBottle"></div><div><label>Fahrzeug</label>${vehicleSelect(d.vehicleId)}</div><div><label>Neues Eingangsdatum / geprüft ab</label><input type="date" id="nRec" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Gerät / LA: neuer Austauschtermin</label><input type="date" id="nDue" value="${addMonths(new Date().toISOString().slice(0,10),6)}" readonly></div><div><label>Flasche: neuer Austauschtermin</label><input type="date" id="nBottleDue" value="${addYears(new Date().toISOString().slice(0,10),6)}" readonly></div></div><div class="toolbar" style="margin-top:18px"><button onclick="finishExchangeDevice('${id}')">Austausch speichern</button></div>`)}
+function finishExchangeDevice(id){let d=data.devices.find(x=>x.id===id),today=$("nRec").value;data.history.push({id:uid(),date:new Date().toISOString().slice(0,10),type:"Gerät ausgetauscht",old:{deviceNo:d.deviceNo,laNo:d.laNo,bottleNo:d.bottleNo},new:{deviceNo:$("nDev").value,laNo:$("nLa").value,bottleNo:$("nBottle").value}});
+d.deviceNo=$("nDev").value.trim();d.laNo=$("nLa").value.trim();d.bottleNo=$("nBottle").value.trim();d.vehicleId=$("vehicleId").value;d.received=today;d.due=addMonths(today,6);d.bottleDue=addYears(today,6);closeModal();save()}
+function openMask(id){let m=data.masks.find(x=>x.id===id)||{maskNo:"",vehicleId:"",testDate:new Date().toISOString().slice(0,10),due:""};
+showModal(id?"Maske bearbeiten":"Maske hinzufügen",`<div class="notice">Bei Masken wird das <b>Prüfdatum des Dienstleisters</b> übernommen. Daraus wird der nächste Termin berechnet.</div><div class="formgrid"><div><label>Maskennummer</label><input id="maskNo" value="${esc(m.maskNo)}"></div><div><label>Fahrzeug</label>${vehicleSelect(m.vehicleId)}</div><div><label>Prüfdatum des Dienstleisters</label><input type="date" id="testDate" value="${esc(m.testDate)}"></div><div><label>Austausch fällig am</label><input type="date" id="maskDue" value="${esc(m.due)}" readonly style="color:#68737e">Wird automatisch berechnet, kann korrigiert werden.</small></div></div><div class="toolbar" style="margin-top:18px"><button onclick="saveMask('${id||""}')">Speichern</button></div>`)}
+function saveMask(id){let td=$("testDate").value,obj={maskNo:$("maskNo").value.trim(),vehicleId:$("vehicleId").value,testDate:td,due:addMonths(td,6)};if(!obj.maskNo)return alert("Bitte Maskennummer angeben.");if(id)Object.assign(data.masks.find(m=>m.id===id),obj);else data.masks.push({id:uid(),...obj});closeModal();save()}
+function deleteMask(id){if(confirm("Maske wirklich löschen?")){data.masks=data.masks.filter(x=>x.id!==id);save()}}
+function exchangeMask(id){let m=data.masks.find(x=>x.id===id);showModal("Maske austauschen",`<p>Neue Maske eintragen:</p><div class="formgrid"><div><label>Neue Maskennummer</label><input id="nMask"></div><div><label>Fahrzeug</label>${vehicleSelect(m.vehicleId)}</div><div><label>Prüfdatum des Dienstleisters</label><input type="date" id="nTest" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Neuer Termin</label><input type="date" id="nMaskDue" readonly value="${addMonths(new Date().toISOString().slice(0,10),6)}"></div></div><div class="toolbar" style="margin-top:18px"><button onclick="finishExchangeMask('${id}')">Austausch speichern</button></div>`)}
+function finishExchangeMask(id){let m=data.masks.find(x=>x.id===id),td=$("nTest").value;data.history.push({id:uid(),date:new Date().toISOString().slice(0,10),type:"Maske ausgetauscht",old:m.maskNo,new:$("nMask").value});m.maskNo=$("nMask").value.trim();m.vehicleId=$("vehicleId").value;m.testDate=td;m.due=addMonths(td,6);closeModal();save()}
+function openBottle(id){let b=data.bottles.find(x=>x.id===id)||{bottleNo:"",vehicleId:"",received:new Date().toISOString().slice(0,10)};showModal(id?"Flasche bearbeiten":"Einzelflasche anlegen",`<div class="notice">Einzelflaschen werden unabhängig vom Gerätesatz verwaltet. Frist: 6 Jahre ab Eingang.</div><div class="formgrid"><div><label>Flaschennummer</label><input id="singleNo" value="${esc(b.bottleNo)}"></div><div><label>Fahrzeug</label>${vehicleSelect(b.vehicleId)}</div><div><label>Eingangsdatum</label><input type="date" id="singleReceived" value="${esc(b.received)}"></div></div><div class="toolbar" style="margin-top:18px"><button onclick="saveBottle('${id||""}')">Speichern</button></div>`)}
+function saveBottle(id){let bottleNo=$("singleNo").value.trim(),received=$("singleReceived").value;if(!bottleNo||!received)return alert("Flaschennummer und Datum eingeben.");let b={bottleNo,received,vehicleId:$("vehicleId").value,due:addYears(received,6)};if(id)Object.assign(data.bottles.find(x=>x.id===id),b);else data.bottles.push({id:uid(),...b});closeModal();save()}
+function deleteBottle(id){if(confirm("Einzelflasche löschen?")){data.bottles=data.bottles.filter(b=>b.id!==id);save()}}
+function exchangeBottle(id){let b=data.bottles.find(x=>x.id===id);showModal("Einzelflasche austauschen",`<p>Bisherige Flasche: <b>${esc(b.bottleNo)}</b></p><div class="formgrid"><div><label>Neue Flaschennummer</label><input id="singleNo"></div><div><label>Fahrzeug</label>${vehicleSelect(b.vehicleId)}</div><div><label>Neues Eingangsdatum</label><input type="date" id="singleReceived" value="${new Date().toISOString().slice(0,10)}"></div></div><div class="toolbar" style="margin-top:18px"><button onclick="finishExchangeBottle('${id}')">Austausch speichern</button></div>`)}
+function finishExchangeBottle(id){let b=data.bottles.find(x=>x.id===id),bottleNo=$("singleNo").value.trim(),received=$("singleReceived").value;if(!bottleNo||!received)return alert("Flaschennummer und Datum eingeben.");data.history.push({id:uid(),date:new Date().toISOString().slice(0,10),type:"Einzelflasche ausgetauscht",old:{...b},new:{bottleNo,received}});Object.assign(b,{bottleNo,received,vehicleId:$("vehicleId").value,due:addYears(received,6)});closeModal();save()}
+function showModal(t,b){$("modalTitle").textContent=t;$("modalBody").innerHTML=b;$("modal").classList.add("open")}function closeModal(){$("modal").classList.remove("open")}
+function exportData(){let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="atemschutz-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(a.href)}
+function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.vehicles||!x.devices||!x.masks)throw Error();data=x;data.bottles ||= [];data.history ||= [];normalizeDeadlines();save();alert("Import wird in Google Drive gespeichert.")}catch(_){alert("Ungültige Sicherungsdatei.")}};r.readAsText(f)}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(b.dataset.page).classList.add("active")});
+render();
+document.addEventListener("click",e=>{let b=e.target.closest("button");if(!b||online)return;if(/^(open|save|delete|exchange|finish)/.test((b.getAttribute("onclick")||"").trim())){e.preventDefault();e.stopImmediatePropagation();alert("Ohne Serververbindung ist die Bearbeitung gesperrt.")}},true);
+setConnection("Nicht angemeldet – mit Google verbinden",false);setInterval(()=>{if(driveToken&&!pending&&!document.querySelector(".modal.open"))loadShared()},15000);
+</script>
+</body></html>
