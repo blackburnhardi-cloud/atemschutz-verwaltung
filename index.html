@@ -29,6 +29,8 @@ input,select{background:#101c27;color:#fff;border-color:#71849a}label{color:#d8e
 .notice{background:#343024;border-color:#a88b4a;color:#fff}.ok{background:#174e3a;color:#b6ffda}.soon{background:#59441c;color:#ffe0a2}.overdue{background:#602c32;color:#ffc2c2}.none{background:#37495a;color:#fff}
 .vehicle-card [style*="border-bottom:1px solid #e8ebee"]{border-bottom-color:#405264!important}
 :focus-visible{outline:3px solid #9ecfff;outline-offset:2px}
+
+#appVersion{position:fixed;right:10px;bottom:8px;z-index:1000;padding:5px 9px;background:#263748;color:#d9e9f7;border:1px solid #536b82;border-radius:6px;font:12px system-ui,sans-serif;pointer-events:none}
 </style>
 <style>
 body:not(.authenticated) > header,body:not(.authenticated) > nav,body:not(.authenticated) > main{display:none!important}
@@ -91,7 +93,7 @@ async function driveFetch(url,opts={}){
  return response;
 }
 async function findDriveFile(){
- let r=await driveFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q="+encodeURIComponent("name = '"+DRIVE_NAME+"' and trashed = false")+"&fields=files(id,name,version),nextPageToken&page_size=100");
+ let r=await driveFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q="+encodeURIComponent("name = '"+DRIVE_NAME+"' and trashed = false")+"&fields=files(id,name,version),nextPageToken&pageSize=100");
  let files=(await r.json()).files||[];
  if(files.length>1)throw Error("Mehrere Sicherungsdateien gefunden. Bitte nicht bearbeiten, bevor die Duplikate geprüft wurden.");
  return files[0]||null;
@@ -136,7 +138,7 @@ async function save(){
  let x=await r.json();driveVersion=String(x.version);
  }
  lastSavedData=structuredClone(snapshot);setConnection("Google Drive verbunden – gespeichert",true);render();
- }catch(e){console.error(e);setConnection("Speichern fehlgeschlagen – bitte neu anmelden oder Verbindung prüfen",false);alert("Speichern fehlgeschlagen. Änderungen bitte über „Daten sichern“ als JSON exportieren und anschließend die Verbindung prüfen.")}
+ }catch(e){console.error(e);setConnection("Speichern fehlgeschlagen – bitte neu anmelden oder Verbindung prüfen",false);alert("Speichern fehlgeschlagen: "+(e?.message||String(e))+"\n\nBitte Daten über „Daten sichern“ als JSON exportieren.")}
  finally{pending=false;unsaved=false}
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
@@ -212,4 +214,4 @@ render();
 document.addEventListener("click",e=>{let b=e.target.closest("button");if(!b||online)return;if(/^(open|save|delete|exchange|finish)/.test((b.getAttribute("onclick")||"").trim())){e.preventDefault();e.stopImmediatePropagation();alert("Ohne Serververbindung ist die Bearbeitung gesperrt.")}},true);
 setConnection("Nicht angemeldet – mit Google verbinden",false);setInterval(()=>{if(driveToken&&!pending&&!document.querySelector(".modal.open"))loadShared()},15000);
 </script>
-</body></html>
+<div id="appVersion" aria-label="App-Version">Version 15</div></body></html>
