@@ -58,7 +58,7 @@ body.authenticated > #loginGate{display:none!important}
 <section id="masken" class="page"><div class="toolbar"><h2>Masken</h2><button onclick="openMask()">+ Maske</button></div><div class="card" style="margin-bottom:14px"><label>Suche nach Maskennummer</label><input id="maskSearch" oninput="render()" placeholder="z. B. M-023"></div>
 <div class="card scroll"><table><thead><tr><th>Maske</th><th>Fahrzeug</th><th>Prüfdatum</th><th>Austausch fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="maskTable"></tbody></table></div></section>
 
-<section id="flaschen" class="page"><div class="toolbar"><h2>Einzelflaschen</h2><button onclick="openBottle()">+ Flasche</button></div><div class="card scroll"><table><thead><tr><th>Flasche</th><th>Fahrzeug</th><th>Eingang</th><th>Fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="bottleTable"></tbody></table></div></section><section id="erinnerungen" class="page"><h2>E-Mail-Erinnerungen</h2><div class="card"><p>Für die monatlichen Sammel-E-Mails: am 1. und 25. des Vormonats. Die E-Mail-Adresse wird in deinem Google Drive mitgespeichert.</p><label for="reminderEmail">Empfängeradresse</label><input type="email" id="reminderEmail" placeholder="beispiel@domain.de" autocomplete="email"><div class="toolbar" style="margin-top:14px"><button onclick="saveReminderEmail()">Empfängeradresse speichern</button></div><p style="color:var(--muted);font-size:13px">Hinweis: Der automatische E-Mail-Versand ist noch nicht aktiviert. Dafür muss Google Apps Script separat eingerichtet und sicher mit den Daten verbunden werden. Das Eintragen der Adresse allein verschickt keine E-Mails.</p></div></section><section id="import" class="page"><h2>Import / Export</h2><div class="notice"><b>Gemeinsame Daten:</b> Die Daten liegen im versteckten App-Datenbereich deines Google Drive. Eine Internetverbindung und Google-Anmeldung sind zum Bearbeiten nötig. Vorhandene Daten aus v10/v11 per JSON importieren.</div><div class="card"><h3>Datensicherung</h3><p>Alle Fahrzeuge, Geräte, Masken, Einzelflaschen und die Historie sichern oder wiederherstellen.</p><button onclick="exportData()">JSON exportieren</button><label style="margin-top:18px">JSON-Datei wiederherstellen</label><input type="file" accept=".json,application/json" onchange="importData(event)"></div></section>
+<section id="flaschen" class="page"><div class="toolbar"><h2>Einzelflaschen</h2><button onclick="openBottle()">+ Flasche</button></div><div class="card scroll"><table><thead><tr><th>Flasche</th><th>Fahrzeug</th><th>Eingang</th><th>Fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="bottleTable"></tbody></table></div></section><section id="erinnerungen" class="page"><h2>E-Mail-Erinnerungen</h2><div class="card"><p>Für die monatlichen Sammel-E-Mails: am 1. und 25. des Vormonats. Die E-Mail-Adresse wird in deinem Google Drive mitgespeichert.</p><label for="reminderEmail">Empfängeradresse</label><input type="email" id="reminderEmail" placeholder="beispiel@domain.de" autocomplete="email"><div class="toolbar" style="margin-top:14px"><button onclick="saveReminderEmail()">Empfängeradresse speichern</button></div><p style="color:var(--muted);font-size:13px">Der automatische E-Mail-Versand wird über dein bereits eingerichtetes Google Apps Script gesteuert. Änderungen an der Empfängeradresse werden in Google Drive gespeichert.</p></div></section><section id="import" class="page"><h2>Import / Export</h2><div class="notice"><b>Gemeinsame Daten:</b> Die Daten liegen im versteckten App-Datenbereich deines Google Drive. Eine Internetverbindung und Google-Anmeldung sind zum Bearbeiten nötig. Vorhandene Daten aus v10/v11 per JSON importieren.</div><div class="card"><h3>Datensicherung</h3><p>Alle Fahrzeuge, Geräte, Masken, Einzelflaschen und die Historie sichern oder wiederherstellen.</p><button onclick="exportData()">JSON exportieren</button><label style="margin-top:18px">JSON-Datei wiederherstellen</label><input type="file" accept=".json,application/json" onchange="importData(event)"></div></section>
 </main>
 <div class="modal" id="modal"><div class="modalbox"><div class="modalhead"><h3 id="modalTitle"></h3><button class="secondary" onclick="closeModal()">Schließen</button></div><div id="modalBody"></div></div></div>
 
@@ -75,16 +75,49 @@ let online=false,pending=false,driveToken="",driveFileId="",driveVersion="",driv
 let saveTimer=null,editRevision=0,savedRevision=0,saveBlocked=false,loading=false;
 function setConnection(message,connected){online=connected;const el=$("connectionStatus");if(el){el.textContent=message;el.style.background=connected?"#153f37":"#50302e"}document.body.classList.toggle("authenticated",connected);const gate=$("gateStatus");if(gate)gate.textContent=message}
 function configureDrive(){let current=localStorage.getItem(CLIENT_KEY)||"";let id=prompt("Google OAuth-Client-ID (Webanwendung) eingeben:",current);if(id===null)return;id=id.trim();if(!id.endsWith(".apps.googleusercontent.com"))return alert("Bitte eine gültige OAuth-Client-ID eingeben.");localStorage.setItem(CLIENT_KEY,id);alert("Client-ID gespeichert. Jetzt auf „Mit Google anmelden“ klicken.")}
+// Google Identity Services: erst vorhandene Berechtigung ohne Dialog versuchen.
+// Falls Google Interaktion verlangt, kann der Nutzer den Anmeldebutton verwenden.
+let autoLoginAttempted=false;
+function createDriveClient(){
+ const id=localStorage.getItem(CLIENT_KEY);
+ if(!id||!window.google?.accounts?.oauth2)return false;
+ driveClient=google.accounts.oauth2.initTokenClient({
+  client_id:id,scope:DRIVE_SCOPE,
+  callback:async response=>{
+   if(response.error){
+    if(!driveToken)setConnection("Google-Anmeldung erforderlich – bitte auf „Mit Google anmelden“ klicken",false);
+    return;
+   }
+   if(!response.access_token)return;
+   driveToken=response.access_token;
+   try{
+    if(saveBlocked||unsaved){saveBlocked=false;setConnection("Wieder verbunden – ungespeicherte Änderungen vorhanden",true);scheduleSave();}
+    else await loadShared();
+   }catch(err){console.warn("Google Drive-Verbindung:",err);}
+  },
+  error_callback:()=>{if(!driveToken)setConnection("Google-Anmeldung erforderlich – bitte auf „Mit Google anmelden“ klicken",false);}
+ });
+ return true;
+}
 function connectDrive(){
  const id=localStorage.getItem(CLIENT_KEY);
  if(!id)return configureDrive();
  if(!window.google?.accounts?.oauth2)return alert("Google-Anmeldung ist noch nicht geladen. Internetverbindung prüfen und Seite neu laden.");
  if(location.protocol!=="https:"&&location.hostname!=="localhost")return alert("Für Google-Anmeldung muss die Seite über HTTPS bereitgestellt werden (oder auf localhost laufen).");
- driveClient=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,callback:async response=>{
- if(response.error)return alert("Google-Anmeldung fehlgeschlagen: "+response.error);
- driveToken=response.access_token;if(saveBlocked||unsaved){saveBlocked=false;setConnection("Wieder verbunden – ungespeicherte Änderungen vorhanden",true);scheduleSave();}else await loadShared();
- }});
- driveClient.requestAccessToken({prompt:"consent"});
+ if(!createDriveClient())return;
+ // Kein erzwungener Zustimmungsdialog bei jeder Anmeldung.
+ // Google zeigt bei Bedarf selbst Kontoauswahl oder Berechtigungsabfrage.
+ driveClient.requestAccessToken({prompt:""});
+}
+function tryAutomaticDriveLogin(){
+ if(autoLoginAttempted||driveToken||!localStorage.getItem(CLIENT_KEY))return;
+ if(!window.google?.accounts?.oauth2)return;
+ autoLoginAttempted=true;
+ if(createDriveClient()){
+  setConnection("Google-Anmeldung wird geprüft …",false);
+  try{driveClient.requestAccessToken({prompt:""});}
+  catch(err){setConnection("Bitte auf „Mit Google anmelden“ klicken",false);}
+ }
 }
 function disconnectDrive(){if(driveToken&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(driveToken,()=>{});driveToken="";driveFileId="";driveVersion="";lastSavedData=null;clearTimeout(saveTimer);saveTimer=null;saveBlocked=false;editRevision=0;savedRevision=0;unsaved=false;data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};localStorage.removeItem(KEY);setConnection("Abgemeldet",false);render()}
 async function driveFetch(url,opts={}){
@@ -249,6 +282,9 @@ function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(b.dataset.page).classList.add("active")});
 render();
 document.addEventListener("click",e=>{let b=e.target.closest("button");if(!b||online)return;if(/^(open|save|delete|exchange|finish)/.test((b.getAttribute("onclick")||"").trim())){e.preventDefault();e.stopImmediatePropagation();alert("Ohne Serververbindung ist die Bearbeitung gesperrt.")}},true);
-setConnection("Nicht angemeldet – mit Google verbinden",false);setInterval(()=>{if(driveToken&&!pending&&!document.querySelector(".modal.open"))loadShared()},15000);
+setConnection("Nicht angemeldet – mit Google verbinden",false);
+// Beim Öffnen eine vorhandene Google-Sitzung wiederverwenden, ohne Token zu speichern.
+let gisWaitCount=0;const gisWait=setInterval(()=>{if(window.google?.accounts?.oauth2){clearInterval(gisWait);tryAutomaticDriveLogin();}else if(++gisWaitCount>=40){clearInterval(gisWait);}},250);
+setInterval(()=>{if(driveToken&&!pending&&!document.querySelector(".modal.open"))loadShared()},15000);
 </script>
-<div id="appVersion" aria-label="App-Version">Version 19</div></body></html>
+<div id="appVersion" aria-label="App-Version">Version 20</div></body></html>
