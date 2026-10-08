@@ -136,11 +136,19 @@ async function flushSave(){
  const snapshot=structuredClone(data);
  try{
  const remote=await fetchDriveState();
+ // Drive list metadata can temporarily report an older version after a successful write.
+ // Compare actual stored content with the last confirmed snapshot before calling it a conflict.
  if((remote.file?.id||"")!==driveFileId || String(remote.file?.version||"")!==driveVersion){
-  saveBlocked=true;
-  setConnection("Speicherkonflikt – Änderungen lokal erhalten, bitte JSON sichern",true);
-  alert("Google Drive wurde auf einem anderen Gerät geändert. Deine lokalen Eingaben bleiben erhalten. Bitte jetzt über ‚Daten sichern‘ als JSON exportieren und die Seite nicht neu laden.");
-  return;
+  const sameFile=(remote.file?.id||"")===driveFileId;
+  const sameContent=sameFile && lastSavedData!==null && JSON.stringify(remote.data)===JSON.stringify(lastSavedData);
+  if(sameContent){
+   driveVersion=String(remote.file.version);
+  }else{
+   saveBlocked=true;
+   setConnection("Speicherkonflikt – Änderungen lokal erhalten, bitte JSON sichern",true);
+   alert("Die Cloud-Daten weichen von der zuletzt gespeicherten Version ab. Bitte jetzt über ‚Daten sichern‘ als JSON exportieren und die Seite nicht neu laden.");
+   return;
+  }
  }
  if(!driveFileId){
   let meta={name:DRIVE_NAME,parents:["appDataFolder"],mimeType:"application/json"};
@@ -241,4 +249,4 @@ render();
 document.addEventListener("click",e=>{let b=e.target.closest("button");if(!b||online)return;if(/^(open|save|delete|exchange|finish)/.test((b.getAttribute("onclick")||"").trim())){e.preventDefault();e.stopImmediatePropagation();alert("Ohne Serververbindung ist die Bearbeitung gesperrt.")}},true);
 setConnection("Nicht angemeldet – mit Google verbinden",false);setInterval(()=>{if(driveToken&&!pending&&!document.querySelector(".modal.open"))loadShared()},15000);
 </script>
-<div id="appVersion" aria-label="App-Version">Version 17</div></body></html>
+<div id="appVersion" aria-label="App-Version">Version 18</div></body></html>
