@@ -72,6 +72,7 @@ const CLIENT_KEY="atemschutz_google_client_id";
 const DRIVE_NAME="atemschutz-verwaltung.json";
 const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.appdata";
 let online=false,pending=false,driveToken="",driveFileId="",driveVersion="",driveClient=null,lastSavedData=null,unsaved=false;
+let saveTimer=null,editRevision=0,savedRevision=0,saveBlocked=false;
 function setConnection(message,connected){online=connected;const el=$("connectionStatus");if(el){el.textContent=message;el.style.background=connected?"#153f37":"#50302e"}document.body.classList.toggle("authenticated",connected);const gate=$("gateStatus");if(gate)gate.textContent=message}
 function configureDrive(){let current=localStorage.getItem(CLIENT_KEY)||"";let id=prompt("Google OAuth-Client-ID (Webanwendung) eingeben:",current);if(id===null)return;id=id.trim();if(!id.endsWith(".apps.googleusercontent.com"))return alert("Bitte eine gültige OAuth-Client-ID eingeben.");localStorage.setItem(CLIENT_KEY,id);alert("Client-ID gespeichert. Jetzt auf „Mit Google anmelden“ klicken.")}
 function connectDrive(){
@@ -81,11 +82,11 @@ function connectDrive(){
  if(location.protocol!=="https:"&&location.hostname!=="localhost")return alert("Für Google-Anmeldung muss die Seite über HTTPS bereitgestellt werden (oder auf localhost laufen).");
  driveClient=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,callback:async response=>{
  if(response.error)return alert("Google-Anmeldung fehlgeschlagen: "+response.error);
- driveToken=response.access_token;await loadShared();
+ driveToken=response.access_token;if(saveBlocked||unsaved){saveBlocked=false;setConnection("Wieder verbunden – ungespeicherte Änderungen vorhanden",true);scheduleSave();}else await loadShared();
  }});
  driveClient.requestAccessToken({prompt:"consent"});
 }
-function disconnectDrive(){if(driveToken&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(driveToken,()=>{});driveToken="";driveFileId="";driveVersion="";lastSavedData=null;data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};localStorage.removeItem(KEY);setConnection("Abgemeldet",false);render()}
+function disconnectDrive(){if(driveToken&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(driveToken,()=>{});driveToken="";driveFileId="";driveVersion="";lastSavedData=null;clearTimeout(saveTimer);saveTimer=null;saveBlocked=false;editRevision=0;savedRevision=0;unsaved=false;data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};localStorage.removeItem(KEY);setConnection("Abgemeldet",false);render()}
 async function driveFetch(url,opts={}){
  let response=await fetch(url,{...opts,headers:{Authorization:"Bearer "+driveToken,...(opts.headers||{})}});
  if(response.status===401){setConnection("Anmeldung abgelaufen – bitte erneut anmelden",false);throw Error("Anmeldung abgelaufen")}
@@ -108,7 +109,7 @@ async function fetchDriveState(){
  return {file,data:obj};
 }
 async function loadShared(){
- if(!driveToken||pending||unsaved)return;
+ if(!driveToken||pending||unsaved||saveTimer||saveBlocked)return;
  try{
  let remote=await fetchDriveState();
  if(remote.file){driveFileId=remote.file.id;driveVersion=String(remote.file.version);data=remote.data;normalizeDeadlines();lastSavedData=structuredClone(data);setConnection("Google Drive verbunden – Daten synchronisiert",true)}
@@ -116,31 +117,54 @@ async function loadShared(){
  render();
  }catch(e){setConnection("Synchronisierung fehlgeschlagen – Bearbeitung gesperrt",false);console.error(e)}
 }
-async function save(){
- if(!online||pending){alert("Momentan kann nicht gespeichert werden. Bitte Verbindung prüfen.");return}
- pending=true;unsaved=true;
+function save(){
+ if(!driveToken){alert("Bitte zuerst mit Google anmelden. Die Änderung bleibt vorläufig im Browser sichtbar.");unsaved=true;return}
+ editRevision++;unsaved=true;render();scheduleSave();
+}
+function scheduleSave(){
+ if(saveBlocked||!driveToken)return;
+ clearTimeout(saveTimer);
+ saveTimer=setTimeout(()=>{saveTimer=null;flushSave()},650);
+ setConnection("Google Drive verbunden – Änderungen werden gespeichert …",true);
+}
+async function flushSave(){
+ if(pending||saveBlocked||!driveToken||editRevision===savedRevision)return;
+ pending=true;
+ const revision=editRevision;
  const snapshot=structuredClone(data);
  try{
  const remote=await fetchDriveState();
  if((remote.file?.id||"")!==driveFileId || String(remote.file?.version||"")!==driveVersion){
- alert("Google Drive wurde auf einem anderen Gerät geändert. Deine Änderung wurde nicht gespeichert. Der neueste Stand wird geladen.");
- data=lastSavedData?structuredClone(lastSavedData):data;
- pending=false;unsaved=false;await loadShared();return;
+  saveBlocked=true;
+  setConnection("Speicherkonflikt – Änderungen bitte als JSON sichern",false);
+  alert("Google Drive wurde auf einem anderen Gerät geändert. Deine lokalen Eingaben bleiben erhalten. Bitte jetzt über ‚Daten sichern‘ als JSON exportieren und die Seite nicht neu laden.");
+  return;
  }
  if(!driveFileId){
- let meta={name:DRIVE_NAME,parents:["appDataFolder"],mimeType:"application/json"};
- let boundary="atemschutz_"+Date.now();
- let body="--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(meta)+"\r\n--"+boundary+"\r\nContent-Type: application/json\r\n\r\n"+JSON.stringify(snapshot)+"\r\n--"+boundary+"--";
- let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,version",{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+boundary},body});
- let x=await r.json();driveFileId=x.id;driveVersion=String(x.version);
+  let meta={name:DRIVE_NAME,parents:["appDataFolder"],mimeType:"application/json"};
+  let boundary="atemschutz_"+Date.now();
+  let body="--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(meta)+"\r\n--"+boundary+"\r\nContent-Type: application/json\r\n\r\n"+JSON.stringify(snapshot)+"\r\n--"+boundary+"--";
+  let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,version",{method:"POST",headers:{"Content-Type":"multipart/related; boundary="+boundary},body});
+  let x=await r.json();driveFileId=x.id;driveVersion=String(x.version);
  }else{
- let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files/"+encodeURIComponent(driveFileId)+"?uploadType=media&fields=id,version",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(snapshot)});
- let x=await r.json();driveVersion=String(x.version);
+  let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files/"+encodeURIComponent(driveFileId)+"?uploadType=media&fields=id,version",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(snapshot)});
+  let x=await r.json();driveVersion=String(x.version);
  }
- lastSavedData=structuredClone(snapshot);setConnection("Google Drive verbunden – gespeichert",true);render();
- }catch(e){console.error(e);setConnection("Speichern fehlgeschlagen – bitte neu anmelden oder Verbindung prüfen",false);alert("Speichern fehlgeschlagen: "+(e?.message||String(e))+"\n\nBitte Daten über „Daten sichern“ als JSON exportieren.")}
- finally{pending=false;unsaved=false}
+ savedRevision=revision;
+ lastSavedData=structuredClone(snapshot);
+ unsaved=editRevision!==savedRevision;
+ setConnection(unsaved?"Google Drive verbunden – weitere Änderungen werden gespeichert …":"Google Drive verbunden – gespeichert",true);
+ render();
+ }catch(e){
+  console.error(e);saveBlocked=true;
+  setConnection("Speichern fehlgeschlagen – lokale Änderungen noch nicht gesichert",false);
+  alert("Speichern fehlgeschlagen: "+(e?.message||String(e))+"\n\nDeine Eingaben bleiben auf dieser Seite erhalten. Bitte über ‚Daten sichern‘ als JSON exportieren, bevor du die Seite schließt oder neu lädst.");
+ }finally{
+  pending=false;
+  if(!saveBlocked&&editRevision!==savedRevision)scheduleSave();
+ }
 }
+
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function addDays(date,days){if(!date)return"";let d=new Date(date+"T00:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
 function addMonths(date,months){if(!date)return"";let d=new Date(date+"T00:00:00");d.setMonth(d.getMonth()+months);return d.toISOString().slice(0,10)}
@@ -214,4 +238,4 @@ render();
 document.addEventListener("click",e=>{let b=e.target.closest("button");if(!b||online)return;if(/^(open|save|delete|exchange|finish)/.test((b.getAttribute("onclick")||"").trim())){e.preventDefault();e.stopImmediatePropagation();alert("Ohne Serververbindung ist die Bearbeitung gesperrt.")}},true);
 setConnection("Nicht angemeldet – mit Google verbinden",false);setInterval(()=>{if(driveToken&&!pending&&!document.querySelector(".modal.open"))loadShared()},15000);
 </script>
-<div id="appVersion" aria-label="App-Version">Version 15</div></body></html>
+<div id="appVersion" aria-label="App-Version">Version 16</div></body></html>
