@@ -30,8 +30,15 @@ input,select{background:#101c27;color:#fff;border-color:#71849a}label{color:#d8e
 .vehicle-card [style*="border-bottom:1px solid #e8ebee"]{border-bottom-color:#405264!important}
 :focus-visible{outline:3px solid #9ecfff;outline-offset:2px}
 </style>
+<style>
+body:not(.authenticated) > header,body:not(.authenticated) > nav,body:not(.authenticated) > main{display:none!important}
+body.authenticated > #loginGate{display:none!important}
+#loginGate{max-width:490px;margin:12vh auto;padding:26px;background:#1c2b3b;border:1px solid #53677c;border-radius:12px;color:#f5f7fb}
+#loginGate h1{font-size:24px;margin-top:0}#loginGate p{line-height:1.6}#loginGate button{margin:5px 8px 5px 0}
+</style>
 </head>
 <body>
+<div id="loginGate" role="main"><h1>Atemschutz-Verwaltung</h1><p>Bitte melde dich mit deinem Google-Konto an, um deine Atemschutzdaten aus Google Drive zu laden.</p><button onclick="connectDrive()">Mit Google anmelden</button><button class="secondary" onclick="configureDrive()">Google Drive einrichten</button><p id="gateStatus" role="status">Nicht angemeldet</p><p style="font-size:12px">Die Webseite ist öffentlich abrufbar. Die Daten in deinem Google Drive sind nur mit einer berechtigten Google-Anmeldung erreichbar.</p></div>
 <header><div><h1>Atemschutz-Verwaltung</h1><small>Bestand &amp; Austauschtermine</small></div><button onclick="exportData()">Daten sichern</button></header>
 <nav>
 <button class="active" data-page="dashboard">Dashboard</button><button data-page="fahrzeuge">Fahrzeuge</button><button data-page="geraete">Geräte</button><button data-page="masken">Masken</button><button data-page="flaschen">Einzelflaschen</button><button data-page="import">Import / Export</button>
@@ -56,14 +63,14 @@ input,select{background:#101c27;color:#fff;border-color:#71849a}label{color:#d8e
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 const KEY="atemschutz_v2";
-let data=JSON.parse(localStorage.getItem(KEY)||'{"vehicles":[],"devices":[],"masks":[],"history":[]}');
+let data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};
 data.bottles ||= [];data.history ||= [];
 const $=id=>document.getElementById(id), uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const CLIENT_KEY="atemschutz_google_client_id";
 const DRIVE_NAME="atemschutz-verwaltung.json";
 const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.appdata";
 let online=false,pending=false,driveToken="",driveFileId="",driveVersion="",driveClient=null,lastSavedData=null,unsaved=false;
-function setConnection(message,connected){online=connected;const el=$("connectionStatus");if(el){el.textContent=message;el.style.background=connected?"#153f37":"#50302e"}}
+function setConnection(message,connected){online=connected;const el=$("connectionStatus");if(el){el.textContent=message;el.style.background=connected?"#153f37":"#50302e"}document.body.classList.toggle("authenticated",connected);const gate=$("gateStatus");if(gate)gate.textContent=message}
 function configureDrive(){let current=localStorage.getItem(CLIENT_KEY)||"";let id=prompt("Google OAuth-Client-ID (Webanwendung) eingeben:",current);if(id===null)return;id=id.trim();if(!id.endsWith(".apps.googleusercontent.com"))return alert("Bitte eine gültige OAuth-Client-ID eingeben.");localStorage.setItem(CLIENT_KEY,id);alert("Client-ID gespeichert. Jetzt auf „Mit Google anmelden“ klicken.")}
 function connectDrive(){
  const id=localStorage.getItem(CLIENT_KEY);
@@ -76,11 +83,11 @@ function connectDrive(){
  }});
  driveClient.requestAccessToken({prompt:"consent"});
 }
-function disconnectDrive(){driveToken="";driveFileId="";driveVersion="";lastSavedData=null;setConnection("Abgemeldet – nur Ansicht",false)}
+function disconnectDrive(){if(driveToken&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(driveToken,()=>{});driveToken="";driveFileId="";driveVersion="";lastSavedData=null;data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};localStorage.removeItem(KEY);setConnection("Abgemeldet",false);render()}
 async function driveFetch(url,opts={}){
  let response=await fetch(url,{...opts,headers:{Authorization:"Bearer "+driveToken,...(opts.headers||{})}});
  if(response.status===401){setConnection("Anmeldung abgelaufen – bitte erneut anmelden",false);throw Error("Anmeldung abgelaufen")}
- if(!response.ok){let detail=await response.text();throw Error("Google Drive: "+response.status+" "+detail.slice(0,180))}
+ if(!response.ok){if(response.status===401){driveToken="";setConnection("Anmeldung abgelaufen – bitte erneut anmelden",false)}let detail=await response.text();throw Error("Google Drive: "+response.status+" "+detail.slice(0,180))}
  return response;
 }
 async function findDriveFile(){
@@ -102,7 +109,7 @@ async function loadShared(){
  if(!driveToken||pending||unsaved)return;
  try{
  let remote=await fetchDriveState();
- if(remote.file){driveFileId=remote.file.id;driveVersion=String(remote.file.version);data=remote.data;normalizeDeadlines();lastSavedData=structuredClone(data);localStorage.setItem(KEY,JSON.stringify(data));setConnection("Google Drive verbunden – Daten synchronisiert",true)}
+ if(remote.file){driveFileId=remote.file.id;driveVersion=String(remote.file.version);data=remote.data;normalizeDeadlines();lastSavedData=structuredClone(data);setConnection("Google Drive verbunden – Daten synchronisiert",true)}
  else{driveFileId="";driveVersion="";data={vehicles:[],devices:[],masks:[],bottles:[],history:[]};lastSavedData=structuredClone(data);setConnection("Google Drive verbunden – noch keine Daten gespeichert",true)}
  render();
  }catch(e){setConnection("Synchronisierung fehlgeschlagen – Bearbeitung gesperrt",false);console.error(e)}
@@ -128,7 +135,7 @@ async function save(){
  let r=await driveFetch("https://www.googleapis.com/upload/drive/v3/files/"+encodeURIComponent(driveFileId)+"?uploadType=media&fields=id,version",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(snapshot)});
  let x=await r.json();driveVersion=String(x.version);
  }
- lastSavedData=structuredClone(snapshot);localStorage.setItem(KEY,JSON.stringify(snapshot));setConnection("Google Drive verbunden – gespeichert",true);render();
+ lastSavedData=structuredClone(snapshot);setConnection("Google Drive verbunden – gespeichert",true);render();
  }catch(e){console.error(e);setConnection("Speichern fehlgeschlagen – bitte neu anmelden oder Verbindung prüfen",false);alert("Speichern fehlgeschlagen. Änderungen bitte über „Daten sichern“ als JSON exportieren und anschließend die Verbindung prüfen.")}
  finally{pending=false;unsaved=false}
 }
