@@ -651,7 +651,12 @@ async function v21PersistInventory(){
    const q="name contains '"+V21_APPROVAL_PREFIX+"' and trashed = false";
    const res=await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=100&fields=nextPageToken,files(id,name)&q='+encodeURIComponent(q)+(page?'&pageToken='+encodeURIComponent(page):''));
    const obj=await res.json();
-   for(const f of obj.files||[])if(f.name.startsWith(V21_APPROVAL_PREFIX)&&f.name.endsWith('.json'))ids.add(f.name.slice(V21_APPROVAL_PREFIX.length,-5));
+   for(const f of obj.files||[]){
+    // Die Demo-Bestandsdatei beginnt ebenfalls mit dem Freigabe-Praefix,
+    // ist aber KEINE Freigabe. Nur echte UUID-Meldungsdateien zaehlen.
+    const match=/^atemschutz-v21-freigabe-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i.exec(f.name);
+    if(match)ids.add(match[1]);
+   }
    page=obj.nextPageToken||'';
   }while(page);
   if(JSON.stringify([...ids].sort())!==JSON.stringify(state.appliedReportIds))throw Error('Freigaben haben sich inzwischen geändert. Bitte zuerst Freigaben aktualisieren.');
