@@ -556,7 +556,10 @@ function v21AdminRequest(action,reportId){
   const cleanup=()=>{window.removeEventListener('message',handler);clearTimeout(timer);form.remove();iframe.remove();v21PendingRequest=null};
   const handler=event=>{
    if(event.source!==iframe.contentWindow)return;
-   if(!['https://script.googleusercontent.com','https://script.google.com'].includes(event.origin))return;
+   if(
+  event.origin !== 'https://script.google.com' &&
+  !/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(event.origin)
+)return;
    const msg=event.data;
    if(!msg||msg.type!=='atemschutz-v21-admin-result'||msg.requestId!==nonce)return;
    cleanup();if(msg.ok)resolve(msg.result);else reject(Error(msg.error||'Serveranfrage abgelehnt.'));
