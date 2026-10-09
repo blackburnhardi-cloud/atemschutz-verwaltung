@@ -624,27 +624,29 @@ function v21ComputeDemoInventory(approvals){
  }
  return {schema:'atemschutz-v21-freigabe-bestand-demo-v1',items:[...map.values()],appliedReportIds:[...new Set(approvals.map(a=>a.reportId))].sort(),warnings};
 }
-function v21RenderDemoInventory(approvals){
+function v21RenderInventoryGroups(state){
  const root=$('v21DemoInventory');if(!root)return;
  root.replaceChildren();
- const state=v21ComputeDemoInventory(approvals);
- for(const item of state.items){
-  const line=document.createElement('p');
-  line.textContent=item.label+' — '+item.place+(item.usedAt?' | Benutzung: '+new Date(item.usedAt).toLocaleString('de-DE'):'');
-  root.append(line);
+ const items=Array.isArray(state.items)?state.items:[];
+ const groups=[
+  {title:'Auf Fahrzeugen / einsatzbereit',items:items.filter(x=>x.status==='einsatzbereit')},
+  {title:'Benutzt / Aufbereitung',items:items.filter(x=>x.status!=='einsatzbereit')}
+ ];
+ for(const group of groups){
+  const section=document.createElement('section');section.className='v21-inventory-group';
+  const heading=document.createElement('h4');heading.textContent=group.title+' ('+group.items.length+')';section.append(heading);
+  if(!group.items.length){const empty=document.createElement('p');empty.textContent='Keine Geräte oder Masken';section.append(empty);}
+  for(const item of group.items){
+   const line=document.createElement('p');
+   line.textContent=String(item.label||item.id||'Unbekannt')+' — '+String(item.place||'Unbekannt')+(item.usedAt&&Number.isFinite(Date.parse(item.usedAt))?' | Benutzung: '+new Date(item.usedAt).toLocaleString('de-DE'):'');
+   section.append(line);
+  }
+  root.append(section);
  }
- if(state.warnings.length){const p=document.createElement('p');p.style.color='#ffb4b4';p.textContent='Prüfhinweis: '+state.warnings.join(' | ');root.append(p);}
+ if(Array.isArray(state.warnings)&&state.warnings.length){const warning=document.createElement('p');warning.style.color='#ffb4b4';warning.textContent='Prüfhinweis: '+state.warnings.join(' | ');root.append(warning);}
 }
-function v21RenderSavedInventory(saved){
- const root=$('v21DemoInventory');if(!root)return;
- root.replaceChildren();
- for(const item of saved.items){
-  const line=document.createElement('p');
-  line.textContent=String(item.label||item.id||'Unbekannt')+' — '+String(item.place||'Unbekannt')+(item.usedAt&&Number.isFinite(Date.parse(item.usedAt))?' | Benutzung: '+new Date(item.usedAt).toLocaleString('de-DE'):'');
-  root.append(line);
- }
- if(Array.isArray(saved.warnings)&&saved.warnings.length){const p=document.createElement('p');p.textContent='Prüfhinweis: '+saved.warnings.join(' | ');root.append(p);}
-}
+function v21RenderDemoInventory(approvals){v21RenderInventoryGroups(v21ComputeDemoInventory(approvals));}
+function v21RenderSavedInventory(saved){v21RenderInventoryGroups(saved);}
 async function v21FindInventoryFile(){
  const q="name = '"+V21_INVENTORY_FILE+"' and trashed = false";
  const res=await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=100&fields=files(id,name,version)&q='+encodeURIComponent(q));
@@ -732,3 +734,10 @@ setConnection("TEST: Demo-Übernahmen nur in diesem Browser gespeichert – echt
 // Google-Login, automatischer Abruf und Hintergrund-Synchronisierung sind in dieser Demo deaktiviert.
 </script>
 <div id="appVersion" aria-label="App-Version">Version 21 – ZENTRALES FREIGABEPROTOKOLL (DEMO)</div></body></html>
+
+<style>
+#reports #v21DemoInventory{display:grid;grid-template-columns:1fr;gap:14px}
+#reports .v21-inventory-group{border:1px solid var(--line);border-radius:12px;padding:14px;background:#192938}
+#reports .v21-inventory-group h4{margin:0 0 12px;font-size:17px}
+#reports .v21-inventory-group p{margin:6px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:#142331}
+</style>
