@@ -789,13 +789,13 @@ function v21ShowVehicleQR(){
  const w=window.open('','_blank');
  if(!w){alert('Bitte Pop-ups für diese Seite erlauben.');return;}
  const doc=w.document;doc.title='V21 – Fahrzeug-QR-Codes';
- const style=doc.createElement('style');style.textContent='body{font:16px system-ui;padding:22px;color:#111}h1{font-size:24px}.cards{display:flex;flex-wrap:wrap;gap:18px}.card{border:1px solid #888;padding:18px;width:280px;break-inside:avoid;text-align:center}.qr{margin:12px auto;min-height:220px;display:flex;justify-content:center;align-items:center}.hint{background:#fff1cc;padding:12px;margin-bottom:20px}button{padding:10px 18px;margin-bottom:18px}@media print{button{display:none}.card{page-break-inside:avoid}}';doc.head.append(style);
+ const style=doc.createElement('style');style.textContent='body{font:16px system-ui;padding:22px;color:#111}h1{font-size:24px}.cards{display:flex;flex-wrap:wrap;gap:18px}.card{border:1px solid #888;padding:18px;width:280px;break-inside:avoid;text-align:center}.qr{margin:12px auto;display:inline-block;background:#fff;padding:20px;line-height:0}.qr img,.qr canvas{display:block!important;image-rendering:pixelated}.hint{background:#fff1cc;padding:12px;margin-bottom:20px}button{padding:10px 18px;margin-bottom:18px}@media print{button{display:none}.card{page-break-inside:avoid}}';doc.head.append(style);
  const title=doc.createElement('h1');title.textContent='🚒 Fahrzeug-QR-Codes (V21 Test)';doc.body.append(title);
  const hint=doc.createElement('p');hint.className='hint';hint.textContent='Nur Test! Die bestehende QR-Meldeseite ist noch nicht mit dem neuen Fahrzeugbestand verbunden. Diese Codes erst nach erfolgreichem Meldetest am Fahrzeug anbringen.';doc.body.append(hint);
  const btn=doc.createElement('button');btn.textContent='Drucken';btn.onclick=()=>w.print();doc.body.append(btn);
  const container=doc.createElement('div');container.className='cards';doc.body.append(container);
  const script=doc.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
- script.onload=()=>{for(const v of cards){const card=doc.createElement('section');card.className='card';const name=doc.createElement('h2');name.textContent=v.name;const qr=doc.createElement('div');qr.className='qr';const url=doc.createElement('small');url.textContent='QR-Meldeseite (Test)';card.append(name,qr,url);container.append(card);new w.QRCode(qr,{text:v.url,width:210,height:210,correctLevel:w.QRCode.CorrectLevel.M});}};
+ script.onload=()=>{for(const v of cards){const card=doc.createElement('section');card.className='card';const name=doc.createElement('h2');name.textContent=v.name;const qr=doc.createElement('div');qr.className='qr';const url=doc.createElement('small');url.textContent='QR-Meldeseite (Test)';card.append(name,qr,url);container.append(card);new w.QRCode(qr,{text:v.url,width:256,height:256,correctLevel:w.QRCode.CorrectLevel.M});}};
  script.onerror=()=>{const p=doc.createElement('p');p.textContent='QR-Code-Bibliothek konnte nicht geladen werden. Bitte Internetverbindung prüfen.';doc.body.append(p);};
  doc.head.append(script);
 }
