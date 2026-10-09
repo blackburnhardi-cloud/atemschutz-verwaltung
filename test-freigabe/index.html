@@ -38,6 +38,18 @@ body.authenticated > #loginGate{display:none!important}
 #loginGate{max-width:490px;margin:12vh auto;padding:26px;background:#1c2b3b;border:1px solid #53677c;border-radius:12px;color:#f5f7fb}
 #loginGate h1{font-size:24px;margin-top:0}#loginGate p{line-height:1.6}#loginGate button{margin:5px 8px 5px 0}
 </style>
+<style>
+#reports .card{padding:20px;border-radius:14px}
+#reports h3{margin:0 0 14px;font-size:18px}
+#reports .toolbar{gap:9px}
+#reports .toolbar button{min-height:42px}
+#reports details summary{cursor:pointer;padding:10px 0;color:#d7e9f8}
+#reports #v21DemoInventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin:12px 0}
+#reports #v21DemoInventory p{margin:0;padding:12px;border:1px solid var(--line);border-radius:9px;background:#142331;line-height:1.5}
+#reports #reportInbox .card{margin:10px 0}
+#reports #v21InventorySaveStatus{font-weight:650;line-height:1.5}
+@media(max-width:600px){#reports .toolbar button{flex:1 1 100%}}
+</style>
 </head>
 <body class="authenticated">
 <div id="loginGate" role="main" style="display:none"><h1>Atemschutz-Verwaltung</h1><p>Bitte melde dich mit deinem Google-Konto an, um deine Atemschutzdaten aus Google Drive zu laden.</p><button onclick="connectDrive()">Mit Google anmelden</button><button class="secondary" onclick="configureDrive()">Google Drive einrichten</button><p id="gateStatus" role="status">Nicht angemeldet</p><p style="font-size:12px">Die Webseite ist öffentlich abrufbar. Die Daten in deinem Google Drive sind nur mit einer berechtigten Google-Anmeldung erreichbar.</p></div>
@@ -60,7 +72,12 @@ body.authenticated > #loginGate{display:none!important}
 
 <section id="exercises" class="page"><h2>Übungen / Sonderbedarf</h2><div class="card"><h3>Neue Übung anlegen</h3><div class="formgrid"><div><label for="exName">Bezeichnung</label><input id="exName" placeholder="z. B. Atemschutzübung Samstag"></div><div><label for="exDate">Datum</label><input id="exDate" type="date"></div></div><button type="button" onclick="createExercise()">Übung erstellen</button><p id="exStatus" role="status"></p></div><div id="exerciseList"></div></section>
 <section id="pickup" class="page"><h2>Benutzt – muss abgeholt werden</h2><div class="card"><p>Hier liegen die als benutzt gemeldeten Geräte und Masken. Nach der Abholung verschwinden sie aus dem aktiven Bestand, bleiben aber in der Historie.</p><div id="pickupList"></div><p id="pickupStatus" role="status"></p></div></section>
-<section id="reports" class="page"><h2>QR-Meldungseingang – Online-Test (nur Demo-Bestand)</h2><div class="card"><p>Hier kannst du die JSON-Testmeldungen aus der QR-Vorschau einlesen. Online-Meldungen können geprüft und ausschließlich in den <strong>lokalen Demo-Bestand</strong> übernommen werden. <strong>Keine Änderung am echten Bestand.</strong> Test-Übernahmen bleiben nach Neuladen in diesem Browser gespeichert. Kein gemeinsamer Google-Drive-Bestand; Browserdaten können gelöscht werden.</p><label for="reportFile">Testmeldung auswählen</label><input id="reportFile" type="file" accept=".json,application/json"><button type="button" onclick="importDemoReport()">Testmeldung einlesen</button><button type="button" onclick="connectDrive()">Mit Google anmelden (nur Meldeeingang-Test)</button><button type="button" class="secondary" onclick="configureDrive()">Google-Zugang einrichten</button><button type="button" onclick="loadOnlineInbox()">Online-Eingang abrufen</button><p><strong>Separater Google-Drive-Demo-Speicher (nur Test):</strong> Erst nach Anmeldung verwenden. Kein Zugriff auf die echte Bestandsdatei.</p><button type="button" onclick="saveDemoCloud()">Demo-Sicherung in Google Drive speichern</button><button type="button" class="secondary" onclick="loadDemoCloud()">Demo-Sicherung aus Google Drive laden</button><div class="card" style="margin-top:14px;border:1px solid #71849a"><h3>Zentrale QR-Freigaben (getrennte Demo)</h3><p>Mit Google Drive verbinden, Online-Eingang laden, Meldungen zentral freigeben. Freigaben werden als eigene Dateien gespeichert. Kein automatischer Eingriff in den Gerätebestand.</p><button type="button" onclick="v21LoadApprovals()">Zentrale Freigaben aktualisieren</button><p id="v21ApprovalStatus" role="status">Noch keine zentralen Freigaben geladen.</p><div id="v21ApprovalList"></div><h3>Zentraler Demo-Gerätestatus (aus Freigaben berechnet)</h3><p>Getrennter zentraler Demo-Bestand in Google Drive. Der echte Bestand wird nicht verändert. Ausgangsbestand ist ein fester Beispieldatensatz.</p><div id="v21DemoInventory" role="status">Freigaben aktualisieren, um den Demo-Status zu sehen.</div><p id="v21InventorySaveStatus" role="status">Noch keine zentrale Demo-Bestandsdatei geprüft.</p><button type="button" onclick="v21PersistInventory()">Demo-Bestand zentral speichern / abgleichen</button></div><p id="reportStatus" role="status"></p><div id="reportInbox"></div></div></section><section id="transfer" class="page"><h2>Geräte und Masken umbuchen</h2><div class="card"><p>Bestand zwischen Fahrzeugen, Lager und „Nicht zugeordnet“ verschieben. Die Umbuchung wird in der Historie festgehalten.</p><div class="formgrid"><div><label for="transferFrom">Herkunft (Lager, nicht zugeordnet oder Fahrzeug)</label><select id="transferFrom" onchange="renderTransfer()"></select></div><div><label for="transferTo">Ziel (Lager, nicht zugeordnet oder Fahrzeug)</label><select id="transferTo" onchange="renderTransfer()"></select></div></div><h3>Verfügbare Geräte und Masken</h3><div id="transferItems"></div><div class="toolbar" style="margin-top:16px"><button onclick="commitTransfer()">Ausgewählte Positionen umbuchen</button></div><p style="font-size:13px;color:var(--muted)">Hinweis: Diese Funktion ist für die angemeldete Verwaltung. Die öffentliche QR-Meldeseite wird erst nach gesonderter Absicherung angeschlossen.</p></div></section><section id="flaschen" class="page"><div class="toolbar"><h2>Einzelflaschen</h2><button onclick="openBottle()">+ Flasche</button></div><div class="card scroll"><table><thead><tr><th>Flasche</th><th>Fahrzeug</th><th>Eingang</th><th>Fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="bottleTable"></tbody></table></div></section><section id="erinnerungen" class="page"><h2>E-Mail-Erinnerungen</h2><div class="card"><p>Für die monatlichen Sammel-E-Mails: am 1. und 25. des Vormonats. Die E-Mail-Adresse wird in deinem Google Drive mitgespeichert.</p><label for="reminderEmail">Empfängeradresse</label><input type="email" id="reminderEmail" placeholder="beispiel@domain.de" autocomplete="email"><div class="toolbar" style="margin-top:14px"><button onclick="saveReminderEmail()">Empfängeradresse speichern</button></div><p style="color:var(--muted);font-size:13px">Der automatische E-Mail-Versand wird über dein bereits eingerichtetes Google Apps Script gesteuert. Änderungen an der Empfängeradresse werden in Google Drive gespeichert.</p></div></section><section id="import" class="page"><h2>Import / Export</h2><div class="notice"><b>Gemeinsame Daten:</b> Die Daten liegen im versteckten App-Datenbereich deines Google Drive. Eine Internetverbindung und Google-Anmeldung sind zum Bearbeiten nötig. Vorhandene Daten aus v10/v11 per JSON importieren.</div><div class="card"><h3>Datensicherung</h3><p>Alle Fahrzeuge, Geräte, Masken, Einzelflaschen und die Historie sichern oder wiederherstellen.</p><button onclick="exportData()">JSON exportieren</button><label style="margin-top:18px">JSON-Datei wiederherstellen</label><input type="file" accept=".json,application/json" onchange="importData(event)"></div></section>
+<section id="reports" class="page"><h2>QR-Meldungen</h2>
+<div class="notice" style="margin-bottom:12px"><strong>V21-Testbetrieb</strong> · Separater Demo-Bestand · V20 bleibt unverändert</div>
+<div class="card" style="margin-bottom:14px"><h3>1. Eingang prüfen</h3><div class="toolbar"><button type="button" onclick="connectDrive()">Google verbinden</button><button type="button" onclick="loadOnlineInbox()">Meldungen abrufen</button><button type="button" class="secondary" onclick="v21LoadApprovals()">Freigaben aktualisieren</button></div><p id="reportStatus" role="status"></p><div id="reportInbox"></div></div>
+<div class="card" style="margin-bottom:14px"><h3>2. Zentraler Bestand</h3><p id="v21InventorySaveStatus" role="status">Noch nicht aus Google Drive geladen.</p><div id="v21DemoInventory" role="status">Bitte Google verbinden.</div><div class="toolbar"><button type="button" onclick="v21PersistInventory()">Bestand speichern / abgleichen</button></div><details><summary>Freigabeprotokoll anzeigen</summary><div id="v21ApprovalList"></div></details><p id="v21ApprovalStatus" role="status">Noch keine zentralen Freigaben geladen.</p></div>
+<details class="card" style="margin-bottom:14px"><summary><strong>Weitere Testfunktionen</strong> · Dateiimport und lokale Demo-Sicherung</summary><div style="padding-top:14px"><label for="reportFile">Testmeldung (JSON)</label><input id="reportFile" type="file" accept=".json,application/json"><div class="toolbar" style="margin-top:10px"><button type="button" onclick="importDemoReport()">Testmeldung einlesen</button><button type="button" class="secondary" onclick="configureDrive()">Google-Zugang einrichten</button><button type="button" onclick="saveDemoCloud()">Demo-Sicherung speichern</button><button type="button" class="secondary" onclick="loadDemoCloud()">Demo-Sicherung laden</button></div></div></details>
+</section><section id="transfer" class="page"><h2>Geräte und Masken umbuchen</h2><div class="card"><p>Bestand zwischen Fahrzeugen, Lager und „Nicht zugeordnet“ verschieben. Die Umbuchung wird in der Historie festgehalten.</p><div class="formgrid"><div><label for="transferFrom">Herkunft (Lager, nicht zugeordnet oder Fahrzeug)</label><select id="transferFrom" onchange="renderTransfer()"></select></div><div><label for="transferTo">Ziel (Lager, nicht zugeordnet oder Fahrzeug)</label><select id="transferTo" onchange="renderTransfer()"></select></div></div><h3>Verfügbare Geräte und Masken</h3><div id="transferItems"></div><div class="toolbar" style="margin-top:16px"><button onclick="commitTransfer()">Ausgewählte Positionen umbuchen</button></div><p style="font-size:13px;color:var(--muted)">Hinweis: Diese Funktion ist für die angemeldete Verwaltung. Die öffentliche QR-Meldeseite wird erst nach gesonderter Absicherung angeschlossen.</p></div></section><section id="flaschen" class="page"><div class="toolbar"><h2>Einzelflaschen</h2><button onclick="openBottle()">+ Flasche</button></div><div class="card scroll"><table><thead><tr><th>Flasche</th><th>Fahrzeug</th><th>Eingang</th><th>Fällig</th><th>Status</th><th>Aktionen</th></tr></thead><tbody id="bottleTable"></tbody></table></div></section><section id="erinnerungen" class="page"><h2>E-Mail-Erinnerungen</h2><div class="card"><p>Für die monatlichen Sammel-E-Mails: am 1. und 25. des Vormonats. Die E-Mail-Adresse wird in deinem Google Drive mitgespeichert.</p><label for="reminderEmail">Empfängeradresse</label><input type="email" id="reminderEmail" placeholder="beispiel@domain.de" autocomplete="email"><div class="toolbar" style="margin-top:14px"><button onclick="saveReminderEmail()">Empfängeradresse speichern</button></div><p style="color:var(--muted);font-size:13px">Der automatische E-Mail-Versand wird über dein bereits eingerichtetes Google Apps Script gesteuert. Änderungen an der Empfängeradresse werden in Google Drive gespeichert.</p></div></section><section id="import" class="page"><h2>Import / Export</h2><div class="notice"><b>Gemeinsame Daten:</b> Die Daten liegen im versteckten App-Datenbereich deines Google Drive. Eine Internetverbindung und Google-Anmeldung sind zum Bearbeiten nötig. Vorhandene Daten aus v10/v11 per JSON importieren.</div><div class="card"><h3>Datensicherung</h3><p>Alle Fahrzeuge, Geräte, Masken, Einzelflaschen und die Historie sichern oder wiederherstellen.</p><button onclick="exportData()">JSON exportieren</button><label style="margin-top:18px">JSON-Datei wiederherstellen</label><input type="file" accept=".json,application/json" onchange="importData(event)"></div></section>
 </main>
 <div class="modal" id="modal"><div class="modalbox"><div class="modalhead"><h3 id="modalTitle"></h3><button class="secondary" onclick="closeModal()">Schließen</button></div><div id="modalBody"></div></div></div>
 
@@ -137,7 +154,8 @@ function createDriveClient(){
    driveToken=response.access_token;
    // Reiner Meldeeingang-Test: echten Bestand NICHT laden oder speichern.
    const s=document.getElementById("reportStatus");
-   if(s)s.textContent="Google verbunden. Jetzt „Online-Eingang abrufen“ klicken. Nur Lesezugriff durch diese Testseite.";
+   if(s)s.textContent="Google verbunden. Freigaben und Demo-Bestand werden geladen …";
+    await v21LoadApprovals();
 
   },
   error_callback:()=>{if(!driveToken)setConnection("Google-Anmeldung erforderlich – bitte auf „Mit Google anmelden“ klicken",false);}
@@ -567,7 +585,6 @@ async function v21LoadApprovals(){
   }while(page);
   v21Approved.clear();for(const id of ids)v21Approved.add(id);
   v21CurrentApprovals=approvals;
-  v21RenderDemoInventory(approvals);
   await v21CheckPersistedInventory();
   const list=$('v21ApprovalList');list.replaceChildren();
   for(const approval of approvals){
@@ -578,7 +595,7 @@ async function v21LoadApprovals(){
    list.append(item);
   }
   renderDemoReports();status.textContent=count+' zentrale Freigabedatei(en) gefunden. Echter Bestand unverändert.';
- }catch(e){status.textContent='Freigaben konnten nicht geladen werden: '+e.message;}
+ }catch(e){status.textContent='Freigaben konnten nicht geladen werden: '+e.message;const inventoryStatus=$('v21InventorySaveStatus');if(inventoryStatus)inventoryStatus.textContent='Bestand konnte nicht geprüft werden: '+e.message;}
 }
 // Read-only, deterministische Bestandsprojektion aus zentralen Freigabedateien.
 // Kein Schreiben in atemschutz-verwaltung.json oder in andere Bestandsdateien.
@@ -618,6 +635,16 @@ function v21RenderDemoInventory(approvals){
  }
  if(state.warnings.length){const p=document.createElement('p');p.style.color='#ffb4b4';p.textContent='Prüfhinweis: '+state.warnings.join(' | ');root.append(p);}
 }
+function v21RenderSavedInventory(saved){
+ const root=$('v21DemoInventory');if(!root)return;
+ root.replaceChildren();
+ for(const item of saved.items){
+  const line=document.createElement('p');
+  line.textContent=String(item.label||item.id||'Unbekannt')+' — '+String(item.place||'Unbekannt')+(item.usedAt&&Number.isFinite(Date.parse(item.usedAt))?' | Benutzung: '+new Date(item.usedAt).toLocaleString('de-DE'):'');
+  root.append(line);
+ }
+ if(Array.isArray(saved.warnings)&&saved.warnings.length){const p=document.createElement('p');p.textContent='Prüfhinweis: '+saved.warnings.join(' | ');root.append(p);}
+}
 async function v21FindInventoryFile(){
  const q="name = '"+V21_INVENTORY_FILE+"' and trashed = false";
  const res=await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=100&fields=files(id,name,version)&q='+encodeURIComponent(q));
@@ -628,13 +655,14 @@ async function v21FindInventoryFile(){
 async function v21CheckPersistedInventory(){
  const el=$('v21InventorySaveStatus');
  const file=await v21FindInventoryFile();
- if(!file){el.textContent='Noch keine zentrale Demo-Bestandsdatei vorhanden.';return;}
+ if(!file){el.textContent='Noch keine zentrale Demo-Bestandsdatei vorhanden. Anzeige aus Freigaben berechnet.';v21RenderDemoInventory(v21CurrentApprovals);return;}
  const response=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
  const saved=await response.json();
  if(saved.schema!=='atemschutz-v21-freigabe-bestand-demo-v1'||!Array.isArray(saved.items)||!Array.isArray(saved.appliedReportIds))throw Error('Unbekanntes Demo-Bestandsformat. Nicht überschreiben.');
+ v21RenderSavedInventory(saved);
  const expected=v21ComputeDemoInventory(v21CurrentApprovals);
  const same=JSON.stringify(saved.appliedReportIds)===JSON.stringify(expected.appliedReportIds) && JSON.stringify(saved.items)===JSON.stringify(expected.items);
- el.textContent=same?'Zentraler Demo-Bestand in Drive vorhanden und mit Freigaben abgeglichen.':'Zentrale Demo-Bestandsdatei weicht von den Freigaben ab. Bitte kontrollieren und erst dann abgleichen.';
+ el.textContent=same?'Gespeicherter Bestand aus Google Drive geladen · mit Freigaben abgeglichen.':'Gespeicherter Bestand aus Google Drive geladen · weicht von Freigaben ab. Bitte prüfen, nicht überschreiben.';
 }
 async function v21PersistInventory(){
  const el=$('v21InventorySaveStatus');
