@@ -8,6 +8,21 @@ function checks(items,cls){return items.length?items.map(([id,label])=>`<div cla
 function refreshUsed(){let v=$('vehicle').value;let s=stock[v];$('used').innerHTML=s?'<h3>Benutzte Geräte</h3>'+checks(s.devices,'usedItem')+'<h3>Benutzte Masken</h3>'+checks(s.masks,'usedItem'):'<p class="muted">Bitte zuerst ein Fahrzeug auswählen.</p>';refreshSource()}
 function localDateTime(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
 $('usedAt').value=localDateTime();
+// V21-Fahrzeugvorauswahl aus dem QR-Link. Keine Demo-Geräte als echte V21-Geräte anzeigen.
+const v21QrParams=new URLSearchParams(location.search);
+const v21QrVehicle=v21QrParams.get('fahrzeug');
+if(v21QrVehicle){
+ const v21QrName=(v21QrParams.get('fahrzeugname')||'Fahrzeug aus QR-Code').slice(0,100);
+ const v21Option=document.createElement('option');
+ v21Option.value=v21QrVehicle;v21Option.textContent=v21QrName;
+ $('vehicle').replaceChildren(v21Option);$('vehicle').value=v21QrVehicle;
+ $('vehicle').disabled=true;
+ $('used').innerHTML='<p class="warning">Fahrzeug erkannt: '+escapeHtml(v21QrName)+'. Die zugehörigen Geräte und Masken können erst nach sicherer Verbindung zum V21-Bestand geladen werden. Bitte noch keine Meldung absenden.</p>';
+ $('submit').disabled=true;$('submit').textContent='Meldung noch nicht freigeschaltet';
+ const warn=document.querySelector('main > p.warning');
+ if(warn)warn.textContent='V21-TEST: Fahrzeug automatisch erkannt. Geräteauswahl und Online-Meldung noch nicht verbunden.';
+}
+
 function dateLocal(){let d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function addMonths(s,n){let [y,m,d]=s.split('-').map(Number);let a=new Date(y,m-1+n,1),last=new Date(a.getFullYear(),a.getMonth()+1,0).getDate();return `${a.getFullYear()}-${String(a.getMonth()+1).padStart(2,'0')}-${String(Math.min(d,last)).padStart(2,'0')}`}
 function gwEntry(type){let div=document.createElement('div');div.className='entry gw-entry';div.dataset.type=type;div.innerHTML=type==='device'?`<strong>Neues Atemschutzgerät</strong><label>Gerätenummer *</label><input class="deviceNo" required><label>Lungenautomatennummer *</label><input class="laNo" required><label>Flaschennummer *</label><input class="bottleNo" required><label>Ausgabedatum *</label><input class="issued" type="date" value="${dateLocal()}" required><p class="muted due">Gerät / LA fällig: ${addMonths(dateLocal(),6)}</p>`:`<strong>Neue Maske</strong><label>Maskennummer *</label><input class="maskNo" required><label>Aufgedrucktes Prüfdatum *</label><input class="maskDate" type="date" required>`;$('gwEntries').append(div);if(type==='device')div.querySelector('.issued').addEventListener('change',e=>{div.querySelector('.due').textContent=e.target.value?'Gerät / LA fällig: '+addMonths(e.target.value,6):'Ausgabedatum fehlt'});}
