@@ -784,6 +784,7 @@ function v21ShowVehicleQR(){
  const cards=data.vehicles.map(v=>{
   const link=new URL('qr-meldung.html',location.href);
   link.searchParams.set('fahrzeug',v.id);
+  link.searchParams.set('fahrzeugname',v.name);
   return {name:v.name,url:link.href};
  });
  const w=window.open('','_blank');
@@ -791,7 +792,7 @@ function v21ShowVehicleQR(){
  const doc=w.document;doc.title='V21 – Fahrzeug-QR-Codes';
  const style=doc.createElement('style');style.textContent='body{font:16px system-ui;padding:22px;color:#111}h1{font-size:24px}.cards{display:flex;flex-wrap:wrap;gap:18px}.card{border:1px solid #888;padding:18px;width:280px;break-inside:avoid;text-align:center}.qr{margin:12px auto;display:inline-block;background:#fff;padding:20px;line-height:0}.qr canvas{display:none!important}.qr img{display:block!important;width:256px;height:256px;image-rendering:pixelated}.hint{background:#fff1cc;padding:12px;margin-bottom:20px}button{padding:10px 18px;margin-bottom:18px}@media print{button{display:none}.card{page-break-inside:avoid}}';doc.head.append(style);
  const title=doc.createElement('h1');title.textContent='🚒 Fahrzeug-QR-Codes (V21 Test)';doc.body.append(title);
- const hint=doc.createElement('p');hint.className='hint';hint.textContent='Nur Test! Die bestehende QR-Meldeseite ist noch nicht mit dem neuen Fahrzeugbestand verbunden. Diese Codes erst nach erfolgreichem Meldetest am Fahrzeug anbringen.';doc.body.append(hint);
+ const hint=doc.createElement('p');hint.className='hint';hint.textContent='Nur Test! Die Fahrzeugauswahl wird über den QR-Link vorausgefüllt. Geräte und Masken sind noch nicht mit dem geschützten V21-Bestand verbunden. Diese Codes erst nach erfolgreichem Meldetest am Fahrzeug anbringen.';doc.body.append(hint);
  const btn=doc.createElement('button');btn.textContent='Drucken';btn.onclick=()=>w.print();doc.body.append(btn);
  const container=doc.createElement('div');container.className='cards';doc.body.append(container);
  const script=doc.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
