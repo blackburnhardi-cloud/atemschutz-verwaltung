@@ -97,7 +97,7 @@ function centralPost(action,params={}){
   for(const [name,value] of Object.entries(fields)){const input=document.createElement('input');input.name=name;input.value=String(value);form.append(input)}
   let done=false;const timer=setTimeout(()=>finish(new Error('Zeitüberschreitung. Verbindung prüfen.')),45000);
   function finish(err,result){if(done)return;done=true;clearTimeout(timer);window.removeEventListener('message',onMessage);form.remove();setTimeout(()=>frame.remove(),500);if(err)reject(err);else resolve(result)}
-  function onMessage(event){if(!['https://script.googleusercontent.com','https://script.google.com'].includes(event.origin)&&!/^https:\/\/[a-z0-9-]+\.script\.googleusercontent\.com$/.test(event.origin))return;const msg=event.data;if(!msg||msg.v21!==true||msg.nonce!==nonce)return;finish(null,msg.result)}
+  function onMessage(event){if(!['https://script.googleusercontent.com','https://script.google.com'].includes(event.origin)&&!/^https:\/\/[a-z0-9-]+(?:-|\.)script\.googleusercontent\.com$/.test(event.origin))return;const msg=event.data;if(!msg||msg.v21!==true||msg.nonce!==nonce)return;finish(null,msg.result)}
   window.addEventListener('message',onMessage);document.body.append(frame,form);form.submit();
  });
 }
