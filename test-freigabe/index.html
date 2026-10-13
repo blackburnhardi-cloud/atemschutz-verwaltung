@@ -91,6 +91,7 @@ const $=id=>document.getElementById(id),uid=()=>crypto.randomUUID();
 let data={vehicles:[],devices:[],masks:[],bottles:[],history:[],exercises:[],settings:{reminderEmail:''}};
 let online=false,saveBlocked=false,revision=0,adminToken='',reports=[],busy=false,queue=Promise.resolve();
 let pendingSave=null;const V21_PENDING_KEY='v21_pending_save_v1';
+let savingNow=false,saveVersion=0,saveHalted=false;
 function setConnection(message,connected){online=connected;const el=$('connectionStatus');if(el){el.textContent=message;el.style.background=connected?'#153f37':'#50302e'}document.body.classList.toggle('authenticated',connected);$('gateStatus').textContent=message;}
 // Apps Script akzeptiert formularbasierte POST-Anfragen von GitHub Pages.
 // Die Antwort wird nur an die festgelegte GitHub-Origin übermittelt.
@@ -124,7 +125,7 @@ function adminPost(action,params={}){
 function signIn(response){
  if(!response?.credential){showReauth('Google-Anmeldung fehlgeschlagen. Bitte erneut versuchen.');return}
  adminToken=response.credential;hideReauth();
- if(pendingSave){retryPendingSave();return}
+ if(pendingSave){saveHalted=false;saveBlocked=false;retryPendingSave();return}
  loadCentral();
 }
 function initLogin(){
@@ -138,44 +139,79 @@ function initLogin(){
 }
 async function loadCentral(){
  if(!adminToken)return;
- if(pendingSave){showReauth('Ungespeicherte Änderung vorhanden. Bitte zuerst speichern oder sichern.');return}
+ if(pendingSave){saveStatus('Änderungen werden noch gespeichert · Aktualisieren bitte später');return}
  setConnection('Zentralen Bestand laden …',online);
  try{
   const r=await adminPost('load');if(!r.ok)throw Error(r.error||'Laden fehlgeschlagen');
   data=r.stock;data.bottles||=[];data.history||=[];data.exercises||=[];data.settings||={reminderEmail:''};revision=Number(data.revision)||0;reports=r.reports||[];saveBlocked=false;
   setConnection('V21-Zentrale verbunden · Revision '+revision,true);render();renderReports();
-  try{const backup=sessionStorage.getItem(V21_PENDING_KEY);if(backup){const saved=JSON.parse(backup);if(saved?.snapshot&&Number.isFinite(Number(saved.base))){if(confirm('Es gibt eine ungespeicherte Änderung aus der letzten Sitzung. Möchtest du versuchen, sie jetzt zu speichern?')){pendingSave=saved;data=structuredClone(saved.snapshot);saveBlocked=true;retryPendingSave()}else{alert('Die ungespeicherte Änderung bleibt in dieser Browser-Sitzung gesichert. Bitte nicht einfach erneut dieselben Daten erfassen.')}}}}catch(e){console.warn('V21 Wiederherstellung:',e)}
+  try{const backup=sessionStorage.getItem(V21_PENDING_KEY);if(backup){const saved=JSON.parse(backup);if(saved?.snapshot&&Number.isFinite(Number(saved.base))){if(confirm('Es gibt eine ungespeicherte Änderung aus der letzten Sitzung. Möchtest du versuchen, sie jetzt zu speichern?')){pendingSave=saved;data=structuredClone(saved.snapshot);saveVersion++;saveBlocked=false;retryPendingSave()}else{alert('Die ungespeicherte Änderung bleibt in dieser Browser-Sitzung gesichert. Bitte nicht einfach erneut dieselben Daten erfassen.')}}}}catch(e){console.warn('V21 Wiederherstellung:',e)}
  }catch(e){if(authError(e.message)){showReauth('Google-Anmeldung abgelaufen. Bitte erneut anmelden.');setConnection('Google-Anmeldung erneuern',true)}else setConnection('Zugriff fehlgeschlagen: '+e.message,false)}
 }
 function keepPending(snapshot,base){
  pendingSave={snapshot,base};
- try{sessionStorage.setItem(V21_PENDING_KEY,JSON.stringify(pendingSave))}catch(_){alert('Der Browser konnte die Änderung nicht zwischenspeichern. Bitte die Seite keinesfalls neu laden.')}
+ try{sessionStorage.setItem(V21_PENDING_KEY,JSON.stringify(pendingSave))}
+ catch(_){alert('Der Browser konnte die Änderung nicht zwischenspeichern. Bitte die Seite nicht neu laden.')}
 }
 function clearPending(){pendingSave=null;try{sessionStorage.removeItem(V21_PENDING_KEY)}catch(_){}}
+function saveStatus(message){
+ const el=$('connectionStatus');if(el){el.textContent=message;el.style.background='#233449'}
+}
 async function retryPendingSave(){
- if(!pendingSave)return;
- if(tokenExpired()){showReauth('Bitte Google-Anmeldung erneuern. Die Änderung ist noch nicht gespeichert.');return}
- const {snapshot,base}=pendingSave;
- setConnection('Gesicherte Änderung wird gespeichert …',true);
- try{
-  const r=await adminPost('save',{payload:JSON.stringify(snapshot),revision:base});
-  if(!r.ok)throw Error(r.error||'Speichern fehlgeschlagen');
-  revision=Number(r.revision);data=structuredClone(snapshot);data.revision=revision;
-  clearPending();saveBlocked=false;document.querySelector('main').style.pointerEvents='';hideReauth();
-  setConnection('V21-Zentrale · gespeichert (Revision '+revision+')',true);render();
- }catch(e){
-  document.querySelector('main').style.pointerEvents='';
-  if(authError(e.message)){showReauth('Anmeldung abgelaufen. Bitte erneut anmelden – deine Änderung bleibt erhalten.');setConnection('Anmeldung erneuern – Änderung noch nicht gespeichert',true)}
-  else{setConnection('Speichern fehlgeschlagen: '+e.message,true);alert('Änderung NICHT gespeichert: '+e.message+'\nDie Daten bleiben als Sicherung in dieser Browser-Sitzung erhalten. Bei Speicherkonflikten bitte nicht blind erneut speichern.');}
+ // Es darf niemals mehr als ein zentraler Bestands-Speichervorgang gleichzeitig laufen.
+ if(savingNow||!pendingSave||saveHalted)return;
+ if(tokenExpired()){
+  showReauth('Google-Anmeldung abgelaufen. Bitte erneut anmelden. Deine Änderungen bleiben vorgemerkt.');
+  saveStatus('Anmeldung erneuern · Änderungen noch nicht gespeichert');return;
  }
+ savingNow=true;
+ try{
+  while(pendingSave&&!saveHalted){
+   if(tokenExpired()){
+    showReauth('Google-Anmeldung abgelaufen. Bitte erneut anmelden. Änderungen bleiben vorgemerkt.');
+    saveStatus('Anmeldung erneuern · Änderungen noch nicht gespeichert');break;
+   }
+   const version=saveVersion;
+   const snapshot=structuredClone(pendingSave.snapshot),base=revision;
+   saveStatus('Änderungen werden im Hintergrund gespeichert …');
+   const r=await adminPost('save',{payload:JSON.stringify(snapshot),revision:base});
+   if(!r.ok)throw Error(r.error||'Speichern fehlgeschlagen');
+   revision=Number(r.revision);data.revision=revision;
+   if(version===saveVersion){
+    clearPending();saveBlocked=false;
+    saveStatus('Alles gespeichert · Revision '+revision);
+   }else{
+    // Während der ersten Übertragung wurden weitere Änderungen vorgenommen.
+    // Nur den neuesten Gesamtbestand mit der neuen Revision übertragen.
+    keepPending(structuredClone(data),revision);
+   }
+  }
+ }catch(e){
+  if(authError(e.message)){
+   showReauth('Google-Anmeldung abgelaufen. Bitte erneut anmelden. Änderungen bleiben vorgemerkt.');
+   saveStatus('Anmeldung erneuern · Änderungen noch nicht gespeichert');
+  }else{
+   // Bei Zeitüberschreitung ist unklar, ob Google schon gespeichert hat.
+   // Deshalb nicht automatisch erneut senden oder eine neuere Revision überschreiben.
+   saveHalted=true;saveBlocked=true;
+   saveStatus('Speicherung angehalten · Änderungen nicht bestätigt');
+   alert('Die Speicherung konnte nicht bestätigt werden: '+e.message+'\nDeine Änderungen sind in dieser Browser-Sitzung vorgemerkt. Bitte keine weiteren Änderungen machen und die Seite nicht neu laden.');
+  }
+ }finally{savingNow=false}
 }
 function save(){
- if(pendingSave||saveBlocked){alert('Es ist noch eine ungespeicherte Änderung vorhanden. Bitte erst die Anmeldung erneuern oder den Fehler beheben.');return}
- if(!online){alert('Nicht verbunden. Änderung noch nicht gespeichert. Bitte erneut anmelden.');return}
- const snapshot=structuredClone(data),base=revision;
- keepPending(snapshot,base);saveBlocked=true;$('modal').classList.remove('open');document.querySelector('main').style.pointerEvents='none';
- if(tokenExpired()){document.querySelector('main').style.pointerEvents='';setConnection('Anmeldung abgelaufen – Änderung gesichert',true);showReauth('Google-Anmeldung abgelaufen. Bitte oben erneut anmelden; deine Änderung wird danach gespeichert.');return}
- queue=queue.then(()=>retryPendingSave());
+ if(saveHalted||saveBlocked){alert('Die Speicherung ist angehalten. Bitte zuerst den Speicherfehler klären.');return}
+ if(!online){alert('Nicht verbunden. Bitte zuerst erneut anmelden.');return}
+ saveVersion++;
+ keepPending(structuredClone(data),revision);
+ $('modal').classList.remove('open');
+ // Oberfläche bleibt bedienbar. Weitere Änderungen werden in derselben Warteschlange zusammengefasst.
+ render();
+ if(tokenExpired()){
+  showReauth('Google-Anmeldung abgelaufen. Bitte erneut anmelden. Deine Änderungen bleiben vorgemerkt.');
+  saveStatus('Anmeldung erneuern · Änderungen noch nicht gespeichert');
+ }else if(!savingNow){void retryPendingSave()}
+ else saveStatus('Weitere Änderungen vorgemerkt · Speicherung läuft …');
 }
 function renderReports(){const root=$('reportInbox');root.replaceChildren();$('reportStatus').textContent=reports.filter(x=>x.status==='offen').length+' offene Meldung(en). Nur deine Freigabe verändert den Bestand.';for(const entry of reports.slice().reverse()){const r=entry.report||{},box=document.createElement('div');box.className='card';box.style.margin='12px 0';const title=document.createElement('h3');title.textContent=(r.vehicle==='__lager__'?'Lager':data.vehicles.find(x=>x.id===r.vehicle)?.name||'Fahrzeug unbekannt')+' · '+entry.status;box.append(title);const detail=document.createElement('p');detail.style.whiteSpace='pre-wrap';detail.textContent='Benutzung: '+(r.usedAt?new Date(r.usedAt).toLocaleString('de-DE'):'—')+'\nBenutzt: '+(r.used||[]).map(x=>x.label||x.id).join(', ')+'\nErsatz: '+(r.replacement?.selected||[]).map(x=>x.label||x.id).join(', ')+'\nHerkunft: '+(r.replacement?.source||'Keine Neubestückung')+'\nMeldung durch: '+(r.reporter||'—')+'\nBemerkung: '+(r.remark||'—');box.append(detail);if(entry.status==='offen'){const yes=document.createElement('button');yes.textContent='Prüfen und freigeben';yes.onclick=()=>decide(entry,'approve');const no=document.createElement('button');no.className='danger';no.style.marginLeft='10px';no.textContent='Ablehnen';no.onclick=()=>decide(entry,'reject');box.append(yes,no)}root.append(box)}if(!reports.length)root.textContent='Noch keine QR-Meldungen eingegangen.';}
 async function decide(entry,action){if(!confirm((action==='approve'?'Diese Meldung wirklich freigeben und den zentralen Bestand ändern?':'Meldung wirklich ablehnen?')))return;try{const r=await adminPost(action,{reportId:entry.id});if(!r.ok)throw Error(r.error||'Aktion fehlgeschlagen');await loadCentral()}catch(e){alert('Nicht ausgeführt: '+e.message)}}
@@ -249,7 +285,7 @@ function renderTransfer(){
  items.innerHTML=found.length?found.map(x=>`<label style="display:block;padding:9px 0"><input type="checkbox" class="transferCheck" data-kind="${x.type}" data-id="${esc(x.id)}" style="width:auto;margin-right:10px">${esc(x.label)}</label>`).join(""):'<p>Keine Geräte oder Masken an dieser Stelle vorhanden.</p>';
 }
 function commitTransfer(){
- if(!online||saveBlocked)return alert("Bitte zuerst mit Google anmelden.");
+ if(!online||saveBlocked)return alert("Bitte zuerst mit Google anmelden oder den Speicherfehler beheben.");
  const from=$("transferFrom").value,to=$("transferTo").value;
  if(from===to)return alert("Bitte unterschiedliche Herkunft und Ziel wählen.");
  const chosen=[...document.querySelectorAll(".transferCheck:checked")];
@@ -312,5 +348,11 @@ function renderPickup(){const root=$('pickupList');if(!root)return;root.replaceC
 function pickupItem(kind,id){const item=data[kind]?.find(x=>x.id===id);if(!item||item.vehicleId!=='__benutzt__')return;if(!confirm(itemLabel(kind,item)+' als abgeholt markieren? Der Eintrag bleibt für die Historie archiviert.'))return;item.vehicleId='__abgeholt__';item.status='Abgeholt';recordMove(kind,item,'Benutzt – muss abgeholt werden','Abgeholt (archiviert)','Abgeholt');$('pickupStatus').textContent='Abholung dokumentiert.';save()}
 $('qrPreviewLink').onclick=()=>window.open('qr-meldung.html','_blank','noopener');
 window.addEventListener('beforeunload',e=>{if(pendingSave||saveBlocked){e.preventDefault();e.returnValue=''}});
+// Entfernt ausschließlich versehentlich sichtbare Punkt-Platzhalter direkt im Seitenkörper.
+(function removeStrayTopLeftDots(){
+  for(const node of [...document.body.childNodes]){
+    if(node.nodeType===Node.TEXT_NODE && /^[\s.\u2026]+$/.test(node.textContent) && /[.\u2026]/.test(node.textContent)) node.remove();
+  }
+})();
 initLogin();
 </script><div id="appVersion">Version 21 · Zentrale</div></body></html>
