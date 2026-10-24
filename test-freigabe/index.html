@@ -215,7 +215,30 @@ function save(){
 }
 function renderReports(){const root=$('reportInbox');root.replaceChildren();$('reportStatus').textContent=reports.filter(x=>x.status==='offen').length+' offene Meldung(en). Nur deine Freigabe verändert den Bestand.';for(const entry of reports.slice().reverse()){const r=entry.report||{},box=document.createElement('div');box.className='card';box.style.margin='12px 0';const title=document.createElement('h3');title.textContent=(r.vehicle==='__lager__'?'Lager':data.vehicles.find(x=>x.id===r.vehicle)?.name||'Fahrzeug unbekannt')+' · '+entry.status;box.append(title);const detail=document.createElement('p');detail.style.whiteSpace='pre-wrap';detail.textContent='Benutzung: '+(r.usedAt?new Date(r.usedAt).toLocaleString('de-DE'):'—')+'\nBenutzt: '+(r.used||[]).map(x=>x.label||x.id).join(', ')+'\nErsatz: '+(r.replacement?.selected||[]).map(x=>x.label||x.id).join(', ')+'\nHerkunft: '+(r.replacement?.source||'Keine Neubestückung')+'\nMeldung durch: '+(r.reporter||'—')+'\nBemerkung: '+(r.remark||'—');box.append(detail);if(entry.status==='offen'){const yes=document.createElement('button');yes.textContent='Prüfen und freigeben';yes.onclick=()=>decide(entry,'approve');const no=document.createElement('button');no.className='danger';no.style.marginLeft='10px';no.textContent='Ablehnen';no.onclick=()=>decide(entry,'reject');box.append(yes,no)}root.append(box)}if(!reports.length)root.textContent='Noch keine QR-Meldungen eingegangen.';}
 async function decide(entry,action){if(!confirm((action==='approve'?'Diese Meldung wirklich freigeben und den zentralen Bestand ändern?':'Meldung wirklich ablehnen?')))return;try{const r=await adminPost(action,{reportId:entry.id});if(!r.ok)throw Error(r.error||'Aktion fehlgeschlagen');await loadCentral()}catch(e){alert('Nicht ausgeführt: '+e.message)}}
-function v21ShowVehicleQR(){let secret=prompt('QR-Zugangsschlüssel eingeben (64 Zeichen aus V21-Skripteigenschaften). Der Schlüssel wird NICHT in GitHub gespeichert:');if(!secret)return;if(!/^[a-zA-Z0-9]{64}$/.test(secret))return alert('Der Schlüssel muss aus 64 Buchstaben/Ziffern bestehen.');const url=new URL('qr-meldung.html',location.href);url.hash='zugang='+encodeURIComponent(secret);const w=window.open('','_blank');if(!w)return alert('Bitte Pop-ups erlauben.');w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Gemeinsamer QR-Code V21</title></head><body style="font:18px system-ui;text-align:center;padding:25px"><h1>V21 · Atemschutz melden</h1><p><strong>Benutze Atemschutzgeräte<br>und Masken melden</strong></p><div id="q" style="display:inline-block;padding:20px;background:white"></div><p><button onclick="print()">Drucken</button></p><p>Nur an berechtigte Feuerwehrangehörige weitergeben.</p></body></html>');w.document.close();const s=w.document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';s.onload=()=>new w.QRCode(w.document.getElementById('q'),{text:url.href,width:256,height:256});w.document.head.append(s);secret='';}
+const V21_QR_LOCAL_KEY='v21_qr_print_secret_v1';
+function v21ShowVehicleQR(){
+  let secret='';
+  try{secret=localStorage.getItem(V21_QR_LOCAL_KEY)||''}catch(_){/* Browser-Speicherung nicht verfügbar */}
+  if(!/^[a-zA-Z0-9]{64}$/.test(secret)){
+    secret=prompt('QR-Zugangsschlüssel einmalig eingeben (64 Zeichen aus V21-Skripteigenschaften). Er wird nur in diesem Browser gespeichert, nicht in GitHub:')||'';
+    if(!secret)return;
+    secret=secret.trim();
+    if(!/^[a-zA-Z0-9]{64}$/.test(secret))return alert('Der Schlüssel muss aus 64 Buchstaben/Ziffern bestehen.');
+    try{localStorage.setItem(V21_QR_LOCAL_KEY,secret)}catch(_){alert('Der Browser konnte den Schlüssel nicht speichern. Beim nächsten Mal musst du ihn erneut eingeben.');}
+  }
+  const url=new URL('qr-meldung.html',location.href);
+  url.hash='zugang='+encodeURIComponent(secret);
+  const w=window.open('','_blank');
+  if(!w)return alert('Bitte Pop-ups erlauben.');
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Gemeinsamer QR-Code V21</title></head><body style="font:18px system-ui;text-align:center;padding:25px"><h1>V21 · Atemschutz melden</h1><p><strong>Benutze Atemschutzgeräte<br>und Masken melden</strong></p><div id="q" style="display:inline-block;padding:20px;background:white"></div><p><button onclick="print()">Drucken</button></p><p>Nur an berechtigte Feuerwehrangehörige weitergeben.</p></body></html>');
+  w.document.close();
+  const s=w.document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  s.onload=()=>new w.QRCode(w.document.getElementById('q'),{text:url.href,width:256,height:256});
+  w.document.head.append(s);
+  secret='';
+}
+
 function v21ExportQrVehicleCatalog(){alert('Nicht mehr nötig: Die QR-Seite lädt den echten Fahrzeug- und Gerätebestand direkt aus der V21-Zentrale.');}
 function connectDrive(){initLogin()}function configureDrive(){alert('Die OAuth-Client-ID wird einmalig in der V21-Datei hinterlegt.');}
 function disconnectDrive(){adminToken='';data={vehicles:[],devices:[],masks:[],bottles:[],history:[],exercises:[],settings:{reminderEmail:''}};setConnection('Abgemeldet',false)}
